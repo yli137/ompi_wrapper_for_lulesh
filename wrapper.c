@@ -18,11 +18,10 @@ int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
 	
 	if( index != -1 ){
 		if( pair[index].comp_size < type_size ){
-			if( rank == 0 )
-				printf("sending i %d pair_size %d comp_size %d orig_size %d\n",
-						index, pair_size, 
-						pair[index].comp_size,
-						pair[index].isend_size );
+			//printf("rank %d sending i %d pair_size %d comp_size %d orig_size %d\n",
+			//		rank, index, pair_size, 
+			//		pair[index].comp_size,
+			//		pair[index].isend_size );
 			int ret = MPI_Isend( pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 					     dest, tag, comm, request );
 			return ret;
@@ -41,6 +40,10 @@ int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 	                 MPI_Status *array_of_statuses )
 {
+	pthread_mutex_lock( &creation_lock );
+	for( int i = 0; i < pair_size; i++ )
+		pthread_mutex_trylock( &(pair[i].pair_lock) );
+	pthread_mutex_unlock( &creation_lock );
 	return MPI_Waitall( count, array_of_requests, array_of_statuses );
 }
 

@@ -40,7 +40,7 @@ int find_and_create( char *addr, int size )
 		pair[0].sending = 0;
 
 		pthread_mutex_init( &(pair[0].pair_lock), NULL );
-		pthread_mutex_lock( &(pair[0].pair_lock) );
+		pthread_mutex_trylock( &(pair[0].pair_lock) );
 		
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
@@ -56,7 +56,7 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].sending = 0;
 
 		pthread_mutex_init( &(pair[pair_size].pair_lock), NULL );
-		pthread_mutex_lock( &(pair[pair_size].pair_lock) );
+		pthread_mutex_trylock( &(pair[pair_size].pair_lock) );
 		
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );

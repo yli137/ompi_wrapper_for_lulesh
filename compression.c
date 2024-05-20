@@ -56,7 +56,12 @@ void *starts_async_compression(void*)
 
 		if( creation_ret == 0 ){
 			got_pair_size = pair_size;
+			int locks[got_pair_size];
 			pthread_mutex_unlock( &creation_lock );
+
+			for( int i = 0; i < got_pair_size; i++ ){
+
+			}
 
 			for( int i = 0; i < got_pair_size; i++ ){
 				if( pair[i].isend_size > 1000 ){
@@ -65,10 +70,6 @@ void *starts_async_compression(void*)
 					if( pair_ret == 0 && pair[i].ready != 1 ){
 						comp_ret = compress_lz4_buffer( pair[i].isend_addr, pair[i].isend_size,
 								pair[i].comp_addr, pair[i].comp_size );
-						if( rank == 0 )
-						printf("i %d pair_size %d comp_size %d orig_size %d\n",
-								i, got_pair_size, comp_ret, pair[i].isend_size);
-						
 						comp_ret != 0 ? pair[i].comp_size = comp_ret : pair[i].comp_size = pair[i].comp_size;
 						pair[i].ready = 1;
 						pthread_mutex_unlock( &(pair[i].pair_lock) );
