@@ -59,21 +59,21 @@ void *starts_async_compression(void*)
 			int locks[got_pair_size];
 			pthread_mutex_unlock( &creation_lock );
 
-			for( int i = 0; i < got_pair_size; i++ ){
-
-			}
+			for( int i = 0; i < got_pair_size; i++ )
+				if( pair[i].isend_size > 1000 )
+					locks[i] = pthread_mutex_trylock( &(pair[i].pair_lock) );
 
 			for( int i = 0; i < got_pair_size; i++ ){
 				if( pair[i].isend_size > 1000 ){
-					pair_ret = pthread_mutex_trylock( &(pair[i].pair_lock) );
+					//pair_ret = pthread_mutex_trylock( &(pair[i].pair_lock) );
 
-					if( pair_ret == 0 && pair[i].ready != 1 ){
+					if( locks[i] == 0 && pair[i].ready != 1 ){
 						comp_ret = compress_lz4_buffer( pair[i].isend_addr, pair[i].isend_size,
 								pair[i].comp_addr, pair[i].comp_size );
 						comp_ret != 0 ? pair[i].comp_size = comp_ret : pair[i].comp_size = pair[i].comp_size;
 						pair[i].ready = 1;
 						pthread_mutex_unlock( &(pair[i].pair_lock) );
-					} else if( pair_ret == 0 && pair[i].ready == 1 ){
+					} else if( locks[i] == 0 && pair[i].ready == 1 ){
 						pthread_mutex_unlock( &(pair[i].pair_lock) );
 					}
 				}
