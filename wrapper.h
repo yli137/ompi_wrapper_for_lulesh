@@ -4,6 +4,8 @@
 #include <mpi.h>
 #include <pthread.h>
 
+extern int first_encounter;
+
 typedef struct addr_pair {
 	char *isend_addr;
 	int isend_size;
@@ -45,8 +47,11 @@ int core_allocator();
 
 int find_and_create( char *addr, int size );
 void hint_compression_starts();
+void hint_compression_starts7_13();
+void hint_compression_starts14_16();
 
 void hint_free_starts(char *ptr);
+
 void *starts_async_compression(void*);
 
 #endif

@@ -8,6 +8,8 @@
 #include <mpi.h>
 #include <lz4.h>
 
+#include <omp.h>
+
 int compress_lz4_buffer( const char *input_buffer, int input_size,
 		         char *output_buffer, int output_size )
 {
@@ -34,6 +36,10 @@ int try_decompress( MPI_Request *request, MPI_Status *status, char *srcAddr )
 			decompress_buffer,
 			recv_count * 270 );
 
+	int rank;
+	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+	if( decomp_size > 0 && rank == 0 ) printf("DECOMPRESSION rank %d recv %d actual_size %d\n",
+			rank, recv_count, decomp_size);
 	if( decomp_size > 0 )
 		memcpy( srcAddr, decompress_buffer, decomp_size );
 
@@ -43,9 +49,6 @@ int try_decompress( MPI_Request *request, MPI_Status *status, char *srcAddr )
 
 void *starts_async_compression(void*)
 {
-#if 0 // this is where core allocator starts
-	core_allocator();
-#endif 
 	int rank;
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
@@ -65,12 +68,11 @@ void *starts_async_compression(void*)
 
 			for( int i = 0; i < got_pair_size; i++ ){
 				if( pair[i].isend_size > 1000 ){
-					//pair_ret = pthread_mutex_trylock( &(pair[i].pair_lock) );
-
 					if( locks[i] == 0 && pair[i].ready != 1 ){
 						comp_ret = compress_lz4_buffer( pair[i].isend_addr, pair[i].isend_size,
 								pair[i].comp_addr, pair[i].comp_size );
-						comp_ret != 0 ? pair[i].comp_size = comp_ret : pair[i].comp_size = pair[i].comp_size;
+						pair[i].comp_size = comp_ret != 0 ? comp_ret: pair[i].comp_size;
+						
 						pair[i].ready = 1;
 						pthread_mutex_unlock( &(pair[i].pair_lock) );
 					} else if( locks[i] == 0 && pair[i].ready == 1 ){
@@ -80,5 +82,4 @@ void *starts_async_compression(void*)
 			}
 		}
 	}
-
 }
