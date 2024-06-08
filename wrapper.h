@@ -52,6 +52,6 @@ void hint_compression_starts14_16();
 
 void hint_free_starts(char *ptr);
 
-void *starts_async_compression(void*);
+void *starts_async_compression(void *arg);
 
 #endif

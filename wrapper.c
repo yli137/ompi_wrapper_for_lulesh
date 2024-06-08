@@ -4,6 +4,12 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <pthread.h>
+#include <sched.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+
 int first_encounter = 1;
 
 int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
@@ -58,8 +64,21 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
 
-	pthread_t threadId;
-	pthread_create( &threadId, NULL, starts_async_compression, NULL );
+	pthread_t threadId, threadId2;
+	int *t1 = (int*)malloc(sizeof(int)),
+	    *t2 = (int*)malloc(sizeof(int));
+	*t1 = 0;
+	*t2 = 1;
 
+	pthread_create( &threadId, NULL, starts_async_compression, t1 );
+	pthread_create( &threadId2, NULL, starts_async_compression, t2 );
+
+#if 0
+	int rank;
+	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(rank, &cpuset);
+#endif
 	return ret;
 }
