@@ -31,6 +31,9 @@ int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
 			//		rank, index, dest, pair_size, 
 			//		pair[index].comp_size,
 			//		pair[index].isend_size );
+
+			clock_gettime( CLOCK_REALTIME, &(pair[index].ts) );
+
 			int ret = MPI_Isend( pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 					     dest, tag, comm, request );
 			return ret;

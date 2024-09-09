@@ -3,6 +3,7 @@
 
 #include <mpi.h>
 #include <pthread.h>
+#include <time.h>
 
 extern int first_encounter;
 
@@ -13,6 +14,8 @@ typedef struct addr_pair {
 	int comp_size;
 	int ready;
 	int sending;
+
+	struct timespec ts;
 
 	pthread_mutex_t pair_lock;
 } Pair;
