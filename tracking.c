@@ -89,3 +89,54 @@ void hint_compression_starts14_16()
 	}
 }
 
+// Function to initialize the recv_manager structure
+void recv_manager_init(recv_manager_t *manager) {
+	manager->size = 0;
+	manager->capacity = INITIAL_CAPACITY;
+	manager->recv_addrs = (char**)malloc(manager->capacity * sizeof(char*));
+	manager->requests = (MPI_Request**)malloc(manager->capacity * sizeof(MPI_Request*));
+	manager->tag = (int*)malloc(manager->capacity * sizeof(int));
+
+	for(int i = 0; i < manager->capacity; i++)
+		manager->recv_addrs[i] = NULL;
+
+	if (manager->recv_addrs == NULL || manager->requests == NULL) {
+		printf("------------Failed to allocate memory for recv_manager\n");
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+}
+
+// Function to add a new MPI_Irecv to the list
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request) {
+	// Check if we need to resize the list
+	if (manager->size >= manager->capacity){
+		manager->capacity *= 2;
+		manager->recv_addrs = (char**) realloc(manager->recv_addrs, manager->capacity * sizeof(char*));
+		manager->requests = (MPI_Request**) realloc(manager->requests, manager->capacity * sizeof(MPI_Request*));
+		manager->tag = (int*) realloc(manager->tag, manager->capacity * sizeof(int));
+
+		if (manager->recv_addrs == NULL || manager->requests == NULL) {
+			printf("--------------Failed to reallocate memory for recv_manager\n");
+			MPI_Abort(MPI_COMM_WORLD, 1);
+		}
+	}
+
+	// Add the new receiving address and request
+	manager->recv_addrs[manager->size] = (char*)recv_addr;
+	manager->requests[manager->size] = request;
+	manager->tag[manager->size] = tag;
+
+	manager->size++;
+
+}
+
+// Function to free the recv_manager resources
+void recv_manager_free(recv_manager_t *manager) {
+	free(manager->recv_addrs);
+	free(manager->requests);
+	free(manager->tag);
+	manager->recv_addrs = NULL;
+	manager->requests = NULL;
+	manager->size = 0;
+	manager->capacity = 0;
+}

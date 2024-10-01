@@ -25,28 +25,16 @@ int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 	return LZ4_decompress_safe( input_buffer, output_buffer, input_size, output_size );
 }
 
-int try_decompress( MPI_Request *request, MPI_Status *status, char *srcAddr )
+void try_decompress( char *input_buffer, int input_size )
 {
+	int output_size = input_size * 1000;
+	char *decompressed_buffer = (char*)malloc(output_size);
+	int dsize = decompress_lz4_buffer_default(input_buffer, input_size, decompressed_buffer, output_size);
 
-	int recv_count = 0;
-	MPI_Get_count( status, MPI_BYTE, &recv_count );
+	if(dsize > input_size)
+		memcpy(input_buffer, decompressed_buffer, dsize);
 
-	char *decompress_buffer = (char*)malloc( recv_count * 270 );
-	int decomp_size = decompress_lz4_buffer_default(
-			(const char*)srcAddr,
-			recv_count,
-			decompress_buffer,
-			recv_count * 270 );
-
-	int rank;
-	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-	//if( decomp_size > 0 && rank == 0 ) printf("DECOMPRESSION rank %d recv %d actual_size %d\n",
-	//		rank, recv_count, decomp_size);
-	if( decomp_size > 0 )
-		memcpy( srcAddr, decompress_buffer, decomp_size );
-
-	free( decompress_buffer );
-	return 1;
+	free(decompressed_buffer);
 }
 
 void *starts_async_compression(void *arg)
