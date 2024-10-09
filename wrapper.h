@@ -7,6 +7,18 @@
 
 extern int first_encounter;
 
+
+struct params {
+    int uffd;
+    long page_size;
+};
+
+struct fault_handler_args {
+    int uffd;
+    size_t length;
+    void* address;
+};
+
 typedef struct addr_pair {
 	char *isend_addr;
 	int isend_size;

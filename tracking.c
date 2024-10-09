@@ -12,7 +12,6 @@ pthread_mutex_t creation_lock;
 
 int find_and_create( char *addr, int size )
 {
-
 	int rank;
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
