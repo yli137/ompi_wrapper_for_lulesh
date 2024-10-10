@@ -37,6 +37,7 @@ void try_decompress( char *input_buffer, int input_size )
 	free(decompressed_buffer);
 }
 
+#if 0
 void *starts_async_compression(void *arg)
 {
 	int num = *((int*)arg);
@@ -97,3 +98,4 @@ void *starts_async_compression(void *arg)
 		}
 	}
 }
+#endif

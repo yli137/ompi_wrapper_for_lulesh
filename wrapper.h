@@ -7,16 +7,17 @@
 
 extern int first_encounter;
 
-
-struct params {
-    int uffd;
-    long page_size;
-};
-
+// Structure to pass to the fault handler thread
 struct fault_handler_args {
     int uffd;
     size_t length;
     void* address;
+    int rank;
+};
+
+struct params {
+    int uffd;
+    long page_size;
 };
 
 typedef struct addr_pair {
@@ -24,13 +25,12 @@ typedef struct addr_pair {
 	int isend_size;
 	char *comp_addr;
 	int comp_size;
-	int ready;
-	int sending;
-
-	struct timespec ts;
+	int created;
 
 	pthread_mutex_t pair_lock;
 } Pair;
+
+
 extern Pair *pair;
 extern int pair_size;
 
@@ -51,6 +51,9 @@ void recv_manager_init(recv_manager_t *manager);
 void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request);
 void recv_manager_free(recv_manager_t *manager);
 
+
+
+void uffd_register(char *addr, size_t size, int rank);
 
 extern recv_manager_t* manager;
 
@@ -77,12 +80,7 @@ void try_decompress( char *input_buffer, int input_size );
 int core_allocator();
 
 int find_and_create( char *addr, int size );
-void hint_compression_starts();
-void hint_compression_starts7_13();
-void hint_compression_starts14_16();
-
 void hint_free_starts(char *ptr);
-
 void *starts_async_compression(void *arg);
 
 #endif

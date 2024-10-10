@@ -5,7 +5,7 @@ DEPENDED_LIB=-L/home/yli137/lz4/lib -llz4 -lhwloc
 RM=rm -f                 
 TARGET_LIB=libwrapper.so 
 
-SRCS=wrapper.c tracking.c compression.c core_allocator.c
+SRCS=wrapper.c tracking.c compression.c core_allocator.c uffd.c
 OBJS=$(SRCS:.c=.o)
 HEADERS=wrapper.h
 

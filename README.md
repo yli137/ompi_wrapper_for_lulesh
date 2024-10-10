@@ -9,3 +9,7 @@ Need to time when compressed buffer stopped changing and record the timestamp.
 uffd cannot register overlap region, first glance. 
 
 Used bkmalloc to do mmap, and registration. Have not caught a fault yet.
+
+**10/9/2024**
+
+Register memory is having trouble.
