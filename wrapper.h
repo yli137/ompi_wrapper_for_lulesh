@@ -30,11 +30,24 @@ typedef struct addr_pair {
 	pthread_mutex_t pair_lock;
 } Pair;
 
+typedef struct register_addr {
+	char *region;
+	int size;
+} reg_addr;
+
+typedef struct register_addr_list {
+	reg_addr *list;
+	int size;
+	int pos;
+} reg_addr_list;
+
+extern reg_addr_list *reg_list;
 
 extern Pair *pair;
 extern int pair_size;
-
 extern pthread_mutex_t creation_lock;
+
+extern int reg_first;
 
 #define INITIAL_CAPACITY 26
 
@@ -51,6 +64,10 @@ void recv_manager_init(recv_manager_t *manager);
 void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request);
 void recv_manager_free(recv_manager_t *manager);
 
+
+reg_addr_list *init_register_list();
+reg_addr_list *realloc_register_list();
+void add_reg_pair(char *region, int size);
 
 
 void uffd_register(char *addr, size_t size, int rank);

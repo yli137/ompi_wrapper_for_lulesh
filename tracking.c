@@ -15,14 +15,9 @@ int find_and_create( char *addr, int size )
 	int rank;
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
-	int lock_ret;
 	for( int i = 0; i < pair_size; i++ ){
 		if( pair[i].isend_addr == addr && pair[i].isend_size == size ){
-			if( pair[i].isend_size > 10000 ){
-				return i;
-			} 
-
-			return -1;
+			return i;
 		}
 	}
 
@@ -104,4 +99,49 @@ void recv_manager_free(recv_manager_t *manager) {
 	manager->requests = NULL;
 	manager->size = 0;
 	manager->capacity = 0;
+}
+
+
+reg_addr_list *init_register_list()
+{
+	reg_addr_list *register_list = (reg_addr_list*)malloc(sizeof(reg_addr_list));
+
+	register_list->size = 30;
+	register_list->pos = 0;
+	register_list->list = (reg_addr*)malloc(sizeof(reg_addr) * 30);
+
+	return register_list;
+}
+
+reg_addr_list *realloc_register_list()
+{
+	reg_list->size *= 2;
+	reg_list->list = (reg_addr*)realloc(reg_list->list, 
+			sizeof(reg_addr) * reg_list->size);
+
+	return reg_list;
+}
+
+void add_reg_pair(char *region, int size)
+{
+	printf("add_reg_pair %p region %p size %d\n", reg_list, region, size);
+	unsigned long point = (unsigned long)region + size;
+	char *add_point = NULL;
+	int add_size = -1;
+	for(int i = 0; i < reg_list->pos; i++){
+		if(point >= (unsigned long)(reg_list->list[i].region) &&
+				point < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+			add_point = reg_list->list[i].region + reg_list->list[i].size;
+			add_size = size - reg_list[i].size;
+		}
+	}
+
+	if(add_size > 0 && add_point != NULL){
+		if(reg_list->pos == reg_list->size)
+			reg_list = realloc_register_list();
+
+		reg_list->list[reg_list->pos].region = add_point;
+		reg_list->list[reg_list->pos].size = add_size;
+		reg_list->pos++;
+	}
 }

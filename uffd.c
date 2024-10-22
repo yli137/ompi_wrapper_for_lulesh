@@ -13,15 +13,12 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <errno.h>
 
 #include "wrapper.h"
 
 static void *handler(void *arg)
 {
-
-	int cpu = sched_getcpu();
-	printf("got onto CPU %d\n", cpu);
-
 	struct fault_handler_args* fargs = (struct fault_handler_args*) arg;
 	struct uffd_msg msg;
 	size_t region_size = fargs->length;
@@ -31,7 +28,7 @@ static void *handler(void *arg)
 	pollfd.fd = fargs->uffd;
 	pollfd.events = POLLIN;
 
-	int page_size = 4096;
+	int page_size = sysconf(_SC_PAGE_SIZE);
 	// Allocate and map a new page
 	void *new_page = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (new_page == MAP_FAILED) {
@@ -40,6 +37,7 @@ static void *handler(void *arg)
 	}
 
 	while (poll(&pollfd, 1, -1) > 0) {
+		printf("got a poll\n");
 		nread = read(fargs->uffd, &msg, sizeof(msg));
 		
 		if (nread == 0 || nread == -1) {
@@ -169,9 +167,15 @@ static void *handler(void *arg)
 
 
 void uffd_register(char *addr, size_t size, int rank){
-	int page_size = 4096;
+	int page_size = sysconf(_SC_PAGE_SIZE);
+	printf("addr %p region %p page_size %d input_size %lu\n", 
+			addr, (char*)((unsigned long)addr & ~(page_size - 1)),
+			page_size,
+			size);
 	char *region = (char*)((unsigned long)addr & ~(page_size - 1));
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
+
+	add_reg_pair(region, region_size);
 
 	// Step 1: Create a userfaultfd object
 	int uffd = syscall(SYS_userfaultfd, O_CLOEXEC | O_NONBLOCK);
@@ -188,9 +192,12 @@ void uffd_register(char *addr, size_t size, int rank){
 	uffdio_register.range.start = (unsigned long)region;
 	uffdio_register.range.len = region_size;
 	uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP; 
-	printf("addr %p size %lu input_size %zu\n", region, region_size, size);
 
-	assert(ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) != -1);
+	int ioret = ioctl(uffd, UFFDIO_REGISTER, &uffdio_register);
+	if(ioret == -1){
+		printf("rank %d error\n", rank);
+		perror("ioctl error\n");
+	}
 
 	// Step 4: Spawn a thread to handle page faults
 	pthread_t uffd_thread;
@@ -200,10 +207,13 @@ void uffd_register(char *addr, size_t size, int rank){
 	args->address = (void*)region;
 
 	assert(pthread_create(&uffd_thread, NULL, handler, args) == 0);
+	printf("created a thread\n");
 
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
 	CPU_SET(rank + 16, &cpuset);
 
 }
+
+
 

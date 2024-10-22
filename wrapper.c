@@ -26,6 +26,10 @@ recv_manager_t* manager = NULL;
 int recv_count = 0;
 int wait_count = 0;
 
+reg_addr_list *reg_list = NULL;
+
+int reg_first = -1;
+
 int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
@@ -38,21 +42,23 @@ int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
 
 	int index = find_and_create((char*)buf, type_size);
 
-	if(index != -1 && type_size > 10000){
+	if(index == -1 && type_size > 10000 && reg_first == -1){
+		printf("\nrank %d type_size %d\n", rank, type_size);
+		index = find_and_create((char*)buf, type_size);
 
-		if(pair[index].created == -1){
-			printf("rank %d\n", rank);
-			uffd_register(pair[index].isend_addr, (size_t)(pair[index].isend_size), rank);
-			pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
-					pair[index].isend_size,
-					pair[index].comp_addr,
-					pair[index].comp_size);
-			pair[index].created = 1;
-		}
+		uffd_register(pair[index].isend_addr, (size_t)(pair[index].isend_size), rank);
+		pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
+				pair[index].isend_size,
+				pair[index].comp_addr,
+				pair[index].comp_size);
+		pair[index].created = 1;
 
-		return MPI_Isend(pair[index].comp_addr, 
-				pair[index].comp_size, 
-				MPI_CHAR, dest, tag, comm, request);
+		reg_first = 1;
+
+		//return MPI_Isend(pair[index].comp_addr, 
+		//		pair[index].comp_size, 
+		//		MPI_CHAR, dest, tag, comm, request);
+		return MPI_Isend( buf, count, type, dest, tag, comm, request );
 	}
 
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
@@ -111,6 +117,9 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
+	reg_list = init_register_list();
+
+	printf("init reg_list %p\n", reg_list);
 
 	return ret;
 }
