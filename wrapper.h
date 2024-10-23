@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <pthread.h>
 #include <time.h>
+#include <openssl/sha.h>
 
 extern int first_encounter;
 
@@ -43,11 +44,16 @@ typedef struct register_addr_list {
 
 extern reg_addr_list *reg_list;
 
+extern struct fault_handler_args *args;
+
 extern Pair *pair;
 extern int pair_size;
 extern pthread_mutex_t creation_lock;
 
 extern int reg_first;
+
+extern unsigned char hash[SHA256_DIGEST_LENGTH];
+extern unsigned char hashprev[SHA256_DIGEST_LENGTH];
 
 #define INITIAL_CAPACITY 26
 

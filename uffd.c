@@ -30,18 +30,22 @@ static void *handler(void *arg)
 
 	int page_size = sysconf(_SC_PAGE_SIZE);
 	// Allocate and map a new page
+	printf("region_size %ld\n", region_size);
 	void *new_page = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (new_page == MAP_FAILED) {
-		perror("mmap");
+		perror("mmap1");
 		exit(EXIT_FAILURE);
 	}
 
-	while (poll(&pollfd, 1, -1) > 0) {
-		printf("got a poll\n");
+	while(1){
+		int pollret = poll(&pollfd, 1, -1);
+		if(pollret == -1)
+			perror("poll not working\n");
+
 		nread = read(fargs->uffd, &msg, sizeof(msg));
-		
+
 		if (nread == 0 || nread == -1) {
-			perror("Error reading userfaultfd event");
+			//perror("Error reading userfaultfd event");
 			continue;
 		}
 
@@ -86,7 +90,7 @@ static void *handler(void *arg)
 					perror("UFFDIO_WRITEPROTECT");
 					exit(EXIT_FAILURE);
 				}
-				
+
 				usleep(1);
 				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
@@ -168,12 +172,13 @@ static void *handler(void *arg)
 
 void uffd_register(char *addr, size_t size, int rank){
 	int page_size = sysconf(_SC_PAGE_SIZE);
-	printf("addr %p region %p page_size %d input_size %lu\n", 
-			addr, (char*)((unsigned long)addr & ~(page_size - 1)),
-			page_size,
-			size);
+	//printf("rank %d addr %p region %p page_size %d input_size %lu\n", 
+	//		rank, addr, (char*)((unsigned long)addr & ~(page_size - 1)),
+	//		page_size,
+	//		size);
 	char *region = (char*)((unsigned long)addr & ~(page_size - 1));
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
+	printf("input region_size %ld actual size %ld\n", region_size, size);
 
 	add_reg_pair(region, region_size);
 
@@ -206,12 +211,12 @@ void uffd_register(char *addr, size_t size, int rank){
 	args->length = region_size;
 	args->address = (void*)region;
 
-	assert(pthread_create(&uffd_thread, NULL, handler, args) == 0);
-	printf("created a thread\n");
+	//struct fault_handler_args args;
+	//args.uffd = uffd;
+	//args.length = region_size;
+	//args.address = (void*)region;
 
-	cpu_set_t cpuset;
-	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 16, &cpuset);
+	assert(pthread_create(&uffd_thread, NULL, handler, args) == 0);
 
 }
 

@@ -22,13 +22,19 @@
 #include <fcntl.h>
 #include <errno.h>
 
+
+#include <openssl/sha.h>
+
 recv_manager_t* manager = NULL;
 int recv_count = 0;
 int wait_count = 0;
 
 reg_addr_list *reg_list = NULL;
 
-int reg_first = -1;
+int reg_first = 0;
+
+unsigned char hash[SHA256_DIGEST_LENGTH];
+unsigned char hashprev[SHA256_DIGEST_LENGTH];
 
 int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
@@ -42,22 +48,34 @@ int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
 
 	int index = find_and_create((char*)buf, type_size);
 
-	if(index == -1 && type_size > 10000 && reg_first == -1){
-		printf("\nrank %d type_size %d\n", rank, type_size);
-		index = find_and_create((char*)buf, type_size);
+	if(index == 8){
+	
+		SHA256_CTX sha256;
+		SHA256_Init(&sha256);
+		SHA256_Update(&sha256, buf, type_size);
+		SHA256_Final(hash, &sha256);
 
-		uffd_register(pair[index].isend_addr, (size_t)(pair[index].isend_size), rank);
-		pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
-				pair[index].isend_size,
-				pair[index].comp_addr,
-				pair[index].comp_size);
-		pair[index].created = 1;
+		for(int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+			if(memcmp(hash, hashprev, SHA256_DIGEST_LENGTH) == 0){
+				printf("rank %d there is a difference\n", rank);
+				break;
+			}
 
-		reg_first = 1;
+		memcpy(hashprev, hash, SHA256_DIGEST_LENGTH);
 
-		//return MPI_Isend(pair[index].comp_addr, 
-		//		pair[index].comp_size, 
-		//		MPI_CHAR, dest, tag, comm, request);
+		if(reg_first == 0){
+			index = find_and_create((char*)buf, type_size);
+
+			uffd_register(pair[index].isend_addr, (size_t)(pair[index].isend_size), rank);
+			pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
+					pair[index].isend_size,
+					pair[index].comp_addr,
+					pair[index].comp_size);
+			pair[index].created = 1;
+		}
+
+		reg_first++;
+
 		return MPI_Isend( buf, count, type, dest, tag, comm, request );
 	}
 
@@ -118,8 +136,6 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
 	reg_list = init_register_list();
-
-	printf("init reg_list %p\n", reg_list);
 
 	return ret;
 }

@@ -21,3 +21,7 @@ Register memory is done, but not working. Wanted to see previous registration an
 Fault thread seems not catching anything. Need to check if the data is being modified or not.
 
 Currently, only registering first 10000B+ region for each thread.
+
+**10/23/2024**
+
+need to move fault handler args to global

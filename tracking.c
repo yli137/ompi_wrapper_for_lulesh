@@ -124,7 +124,6 @@ reg_addr_list *realloc_register_list()
 
 void add_reg_pair(char *region, int size)
 {
-	printf("add_reg_pair %p region %p size %d\n", reg_list, region, size);
 	unsigned long point = (unsigned long)region + size;
 	char *add_point = NULL;
 	int add_size = -1;
