@@ -9,6 +9,7 @@ Pair *pair;
 int pair_size = -1;
 
 pthread_mutex_t creation_lock;
+fault_list flist;
 
 int find_and_create( char *addr, int size )
 {
@@ -110,6 +111,7 @@ reg_addr_list *init_register_list()
 	register_list->pos = 0;
 	register_list->list = (reg_addr*)malloc(sizeof(reg_addr) * 30);
 
+
 	return register_list;
 }
 
@@ -143,4 +145,21 @@ void add_reg_pair(char *region, int size)
 		reg_list->list[reg_list->pos].size = add_size;
 		reg_list->pos++;
 	}
+}
+
+void init_fault_list()
+{
+	flist.args = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args) * 20);
+	flist.size = 20;
+	flist.pos = 0;
+}
+
+void add_fault_args(int uffd, size_t length, void *addr, int rank)
+{
+	int i = flist.pos;
+	flist.args[i].uffd = uffd;
+	flist.args[i].length = length;
+	flist.args[i].address = addr;
+	flist.args[i].rank = rank;
+	flist.pos++;
 }

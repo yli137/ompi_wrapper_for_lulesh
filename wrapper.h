@@ -42,18 +42,25 @@ typedef struct register_addr_list {
 	int pos;
 } reg_addr_list;
 
-extern reg_addr_list *reg_list;
+typedef struct fault_list {
+	struct fault_handler_args *args;
+	int size;
+	int pos;
+} fault_list;
 
-extern struct fault_handler_args *args;
+extern reg_addr_list *reg_list;
+extern fault_list    flist;
 
 extern Pair *pair;
 extern int pair_size;
 extern pthread_mutex_t creation_lock;
 
+extern int* data;
+
 extern int reg_first;
 
-extern unsigned char hash[SHA256_DIGEST_LENGTH];
-extern unsigned char hashprev[SHA256_DIGEST_LENGTH];
+extern unsigned char hash[20000];
+extern unsigned char hashprev[20000];
 
 #define INITIAL_CAPACITY 26
 
@@ -70,6 +77,8 @@ void recv_manager_init(recv_manager_t *manager);
 void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request);
 void recv_manager_free(recv_manager_t *manager);
 
+void init_fault_list();
+void add_fault_args(int uffd, size_t length, void *addr, int rank);
 
 reg_addr_list *init_register_list();
 reg_addr_list *realloc_register_list();
@@ -77,12 +86,13 @@ void add_reg_pair(char *region, int size);
 
 
 void uffd_register(char *addr, size_t size, int rank);
+void *handler(void *arg);
 
 extern recv_manager_t* manager;
 
 // MPI Wrapper
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided );
-int wrapper_MPI_Isend( const void *buf, int count, MPI_Datatype type, int dest,
+int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		       int tag, MPI_Comm comm, MPI_Request *request );
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
         	       int tag, MPI_Comm comm, MPI_Request *request );

@@ -1,7 +1,7 @@
 CC=mpic++
 CFLAGS=-fPIC -Wall -g -fopenmp -O3 -pthread
 LDFLAGS=-shared
-DEPENDED_LIB=-L/home/yli137/lz4/lib -llz4 -lhwloc -lssl -lcrypto
+DEPENDED_LIB=-L/home/yli137/lz4/lib -llz4 -lhwloc
 RM=rm -f                 
 TARGET_LIB=libwrapper.so 
 

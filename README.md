@@ -25,3 +25,9 @@ Currently, only registering first 10000B+ region for each thread.
 **10/23/2024**
 
 need to move fault handler args to global
+
+**11/2/2024**
+
+if memory region is not allocated right before registration. A clear of fault status is needed. Now it can catch fault during lulesh. 
+
+Need to add compression call back after each fault.

@@ -17,7 +17,7 @@
 
 #include "wrapper.h"
 
-static void *handler(void *arg)
+void *handler(void *arg)
 {
 	struct fault_handler_args* fargs = (struct fault_handler_args*) arg;
 	struct uffd_msg msg;
@@ -30,22 +30,26 @@ static void *handler(void *arg)
 
 	int page_size = sysconf(_SC_PAGE_SIZE);
 	// Allocate and map a new page
-	printf("region_size %ld\n", region_size);
+	printf("region_size %ld addr %p\n", region_size, fargs->address);
 	void *new_page = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (new_page == MAP_FAILED) {
 		perror("mmap1");
 		exit(EXIT_FAILURE);
 	}
 
+	int iter = 0;
 	while(1){
-		int pollret = poll(&pollfd, 1, -1);
-		if(pollret == -1)
-			perror("poll not working\n");
+		printf("iter %d\n", iter++);
 
+		int pollret = poll(&pollfd, 1, -1);
+		if(pollret != 0)
+			printf("issue with pollret\n");
+
+		printf("done poll\n");
 		nread = read(fargs->uffd, &msg, sizeof(msg));
 
 		if (nread == 0 || nread == -1) {
-			//perror("Error reading userfaultfd event");
+			perror("Error reading userfaultfd event");
 			continue;
 		}
 
@@ -172,18 +176,15 @@ static void *handler(void *arg)
 
 void uffd_register(char *addr, size_t size, int rank){
 	int page_size = sysconf(_SC_PAGE_SIZE);
-	//printf("rank %d addr %p region %p page_size %d input_size %lu\n", 
-	//		rank, addr, (char*)((unsigned long)addr & ~(page_size - 1)),
-	//		page_size,
-	//		size);
 	char *region = (char*)((unsigned long)addr & ~(page_size - 1));
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
 	printf("input region_size %ld actual size %ld\n", region_size, size);
+	printf("input addr %p actual addr %p\n", region, addr);
 
 	add_reg_pair(region, region_size);
 
 	// Step 1: Create a userfaultfd object
-	int uffd = syscall(SYS_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+	int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
 	assert(uffd != -1);
 
 	// Step 2: Register the memory with userfaultfd
@@ -197,27 +198,21 @@ void uffd_register(char *addr, size_t size, int rank){
 	uffdio_register.range.start = (unsigned long)region;
 	uffdio_register.range.len = region_size;
 	uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP; 
-
-	int ioret = ioctl(uffd, UFFDIO_REGISTER, &uffdio_register);
-	if(ioret == -1){
-		printf("rank %d error\n", rank);
-		perror("ioctl error\n");
-	}
+	uffdio_register.ioctls = 0;
+	assert(ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) != -1);
 
 	// Step 4: Spawn a thread to handle page faults
 	pthread_t uffd_thread;
+
 	struct fault_handler_args *args = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
 	args->uffd = uffd;
 	args->length = region_size;
 	args->address = (void*)region;
+	args->rank = rank;
 
-	//struct fault_handler_args args;
-	//args.uffd = uffd;
-	//args.length = region_size;
-	//args.address = (void*)region;
+	add_fault_args(uffd, region_size, (void*)region, rank);
 
-	assert(pthread_create(&uffd_thread, NULL, handler, args) == 0);
-
+	assert(pthread_create(&uffd_thread, NULL, handler, (void*)args) == 0);
 }
 
 
