@@ -55,12 +55,7 @@ extern Pair *pair;
 extern int pair_size;
 extern pthread_mutex_t creation_lock;
 
-extern int* data;
-
 extern int reg_first;
-
-extern unsigned char hash[20000];
-extern unsigned char hashprev[20000];
 
 #define INITIAL_CAPACITY 26
 
@@ -82,7 +77,7 @@ void add_fault_args(int uffd, size_t length, void *addr, int rank);
 
 reg_addr_list *init_register_list();
 reg_addr_list *realloc_register_list();
-void add_reg_pair(char *region, int size);
+bool add_reg_pair(char *region, int size);
 
 
 void uffd_register(char *addr, size_t size, int rank);

@@ -30,7 +30,6 @@ void *handler(void *arg)
 
 	int page_size = sysconf(_SC_PAGE_SIZE);
 	// Allocate and map a new page
-	printf("region_size %ld addr %p\n", region_size, fargs->address);
 	void *new_page = mmap(NULL, region_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (new_page == MAP_FAILED) {
 		perror("mmap1");
@@ -38,14 +37,7 @@ void *handler(void *arg)
 	}
 
 	int iter = 0;
-	while(1){
-		printf("iter %d\n", iter++);
-
-		int pollret = poll(&pollfd, 1, -1);
-		if(pollret != 0)
-			printf("issue with pollret\n");
-
-		printf("done poll\n");
+	while(poll(&pollfd, 1, -1) > 0){
 		nread = read(fargs->uffd, &msg, sizeof(msg));
 
 		if (nread == 0 || nread == -1) {
@@ -82,6 +74,7 @@ void *handler(void *arg)
 				}
 
 			} else if (msg.arg.pagefault.flags == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)){
+
 				unsigned long fault_address = msg.arg.pagefault.address;
 
 				struct uffdio_writeprotect uffdio_wp;
@@ -178,41 +171,51 @@ void uffd_register(char *addr, size_t size, int rank){
 	int page_size = sysconf(_SC_PAGE_SIZE);
 	char *region = (char*)((unsigned long)addr & ~(page_size - 1));
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
-	printf("input region_size %ld actual size %ld\n", region_size, size);
-	printf("input addr %p actual addr %p\n", region, addr);
 
-	add_reg_pair(region, region_size);
+	if(add_reg_pair(region, region_size)){
+		char *region = reg_list->list[reg_list->pos-1].region;
+		size_t region_size = reg_list->list[reg_list->pos-1].size;
 
-	// Step 1: Create a userfaultfd object
-	int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
-	assert(uffd != -1);
+		// Step 1: Create a userfaultfd object
+		int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+		assert(uffd != -1);
 
-	// Step 2: Register the memory with userfaultfd
-	struct uffdio_api uffdio_api;
-	uffdio_api.api = UFFD_API;
-	uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
-	assert(ioctl(uffd, UFFDIO_API, &uffdio_api) != -1);
+		// Step 2: Register the memory with userfaultfd
+		struct uffdio_api uffdio_api;
+		uffdio_api.api = UFFD_API;
+		uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
+		assert(ioctl(uffd, UFFDIO_API, &uffdio_api) != -1);
 
-	// Step 3: set up address and flags
-	struct uffdio_register uffdio_register;
-	uffdio_register.range.start = (unsigned long)region;
-	uffdio_register.range.len = region_size;
-	uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP; 
-	uffdio_register.ioctls = 0;
-	assert(ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) != -1);
+		// Step 3: set up address and flags
+		struct uffdio_register uffdio_register;
+		uffdio_register.range.start = (unsigned long)region;
+		uffdio_register.range.len = region_size;
+		uffdio_register.mode = UFFDIO_REGISTER_MODE_MISSING | UFFDIO_REGISTER_MODE_WP; 
+		uffdio_register.ioctls = 0;
+		assert(ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) != -1);
 
-	// Step 4: Spawn a thread to handle page faults
-	pthread_t uffd_thread;
+		struct uffdio_writeprotect uffdio_wp;
+		uffdio_wp.range.start = (unsigned long)region;
+		uffdio_wp.range.len = region_size;
+		uffdio_wp.mode = 0;
+		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
-	struct fault_handler_args *args = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
-	args->uffd = uffd;
-	args->length = region_size;
-	args->address = (void*)region;
-	args->rank = rank;
+		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
-	add_fault_args(uffd, region_size, (void*)region, rank);
+		// Step 4: Spawn a thread to handle page faults
+		pthread_t uffd_thread;
 
-	assert(pthread_create(&uffd_thread, NULL, handler, (void*)args) == 0);
+		struct fault_handler_args *args = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
+		args->uffd = uffd;
+		args->length = region_size;
+		args->address = (void*)region;
+		args->rank = rank;
+
+		add_fault_args(uffd, region_size, (void*)region, rank);
+
+		assert(pthread_create(&uffd_thread, NULL, handler, (void*)args) == 0);
+	}
 }
 
 

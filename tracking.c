@@ -124,27 +124,45 @@ reg_addr_list *realloc_register_list()
 	return reg_list;
 }
 
-void add_reg_pair(char *region, int size)
+bool add_reg_pair(char *region, int size)
 {
 	unsigned long point = (unsigned long)region + size;
 	char *add_point = NULL;
 	int add_size = -1;
+	// This region starts with in a registered region
 	for(int i = 0; i < reg_list->pos; i++){
-		if(point >= (unsigned long)(reg_list->list[i].region) &&
-				point < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-			add_point = reg_list->list[i].region + reg_list->list[i].size;
-			add_size = size - reg_list[i].size;
+		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&
+				(unsigned long)region < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+			if(reg_list->list[i].size >= size)
+				return false;
+			region = (char*)((unsigned long)(reg_list->list[i].region + reg_list->list[i].size));
+			size = size - ((unsigned long)region - (unsigned long)(reg_list->list[i].region));
 		}
 	}
 
-	if(add_size > 0 && add_point != NULL){
-		if(reg_list->pos == reg_list->size)
-			reg_list = realloc_register_list();
-
-		reg_list->list[reg_list->pos].region = add_point;
-		reg_list->list[reg_list->pos].size = add_size;
-		reg_list->pos++;
+#if 0
+	// This region starts before all addresses but the later part overlap with one of the registered region
+	for(int i = 0; i < reg_list->pos; i++){
+		if((unsigned long)region < (unsigned long)(reg_list->list[i].region) &&
+				(unsigned long)region + size > (unsigned long)(reg_list->list[i].region)){
+			int result_size = (unsigned long)(reg_list->list[i].region) - (unsigned long)region;
+			
+			if(reg_list->pos == reg_list->size)
+				reg_list = realloc_register_list();
+			reg_list->list[reg_list->pos].region = region;
+			reg_list->list[reg_list->pos].size = result_size;
+			reg_list->pos++;
+			return true;
+		}
 	}
+#endif
+
+	if(reg_list->pos == reg_list->size)
+		reg_list = realloc_register_list();
+	reg_list->list[reg_list->pos].region = region;
+	reg_list->list[reg_list->pos].size = size;
+	reg_list->pos++;
+	return true;
 }
 
 void init_fault_list()

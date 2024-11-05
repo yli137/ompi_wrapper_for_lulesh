@@ -31,3 +31,7 @@ need to move fault handler args to global
 if memory region is not allocated right before registration. A clear of fault status is needed. Now it can catch fault during lulesh. 
 
 Need to add compression call back after each fault.
+
+**11/5/2024**
+
+registration overlap done. Need to add compression
