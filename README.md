@@ -39,3 +39,9 @@ registration overlap done. Need to add compression.
 uffd need to match in order to register multiple addresses into one handler thread.
 
 Performance is not good. Handling fault may be taking way too long or detection of the fault is way too often.
+
+**11/6/2024**
+
+Addded a usleep after compression. Performance is good only when rank 0 do compression and all other ranks do not. 
+
+Guess is that I need to place thread accordingly.

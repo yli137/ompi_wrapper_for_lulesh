@@ -92,19 +92,19 @@ void *handler(void *arg)
 							fault_address < (unsigned long)pair[i].isend_addr + pair[i].isend_size){
 
 						if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
-							int comp_ret = compress_lz4_buffer(pair[i].isend_addr, 
-									pair[i].isend_size,
-									pair[i].comp_addr, 
-									pair[i].comp_size);
+						int comp_ret = compress_lz4_buffer(pair[i].isend_addr, 
+								pair[i].isend_size,
+								pair[i].comp_addr, 
+								pair[i].comp_size);
 
-							pair[i].comp_size = comp_ret != 0 ? comp_ret : pair[i].comp_size;
+						pair[i].comp_size = comp_ret != 0 ? comp_ret : pair[i].comp_size;
 
 							pthread_mutex_unlock(&(pair[i].pair_lock));
 						}
 					}
 				}
 
-
+				usleep(10);
 				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
 					perror("UFFDIO_WRITEPROTECT");

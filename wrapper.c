@@ -43,8 +43,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	type_size *= count;
 
 	int index = find_and_create((char*)buf, type_size);
-	
-	if(index == -1 && type_size > 9000){
+	if(rank == 0 && index == -1){// && type_size > 9000){
 		
 		index = find_and_create((char*)buf, type_size);
 
@@ -54,10 +53,9 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				pair[index].comp_addr,
 				pair[index].comp_size);
 		pair[index].created = 1;
-	} else if(index != -1 && type_size > 9000){
-		pthread_mutex_lock(&(pair[index].pair_lock));
-
+	} else if(rank == 0 && index != -1){// && type_size > 9000){
 		if(pair[index].comp_size < type_size){
+			pthread_mutex_lock(&(pair[index].pair_lock));
 			printf("send index %d comp_size %d type_size %d\n",
 					index, pair[index].comp_size, type_size);
 			return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
@@ -138,6 +136,19 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	
 	pthread_t uffd_thread;
 	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
+
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(rank + 8, &cpuset);
+
+	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
+	if (result != 0) {
+		perror("Error setting thread affinity");
+		return 1;
+    }
 
 	return ret;
 }
