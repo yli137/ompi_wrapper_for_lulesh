@@ -30,6 +30,7 @@ int wait_count = 0;
 reg_addr_list *reg_list = NULL;
 
 int reg_first = 0;
+struct fault_handler_args *fargs;
 
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
@@ -42,17 +43,29 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	type_size *= count;
 
 	int index = find_and_create((char*)buf, type_size);
-	if(rank == 0 && index == -1){
+	
+	if(index == -1 && type_size > 9000){
 		
 		index = find_and_create((char*)buf, type_size);
 
-		uffd_register((char*)buf, type_size, rank);
+		uffd_register((char*)buf, type_size, reg_first, reg_first);
 		pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
 				pair[index].isend_size,
 				pair[index].comp_addr,
 				pair[index].comp_size);
 		pair[index].created = 1;
+	} else if(index != -1 && type_size > 9000){
+		pthread_mutex_lock(&(pair[index].pair_lock));
+
+		if(pair[index].comp_size < type_size){
+			printf("send index %d comp_size %d type_size %d\n",
+					index, pair[index].comp_size, type_size);
+			return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+					dest, tag, comm, request);
+		}
 	}
+
+	reg_first++;
 
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
@@ -104,6 +117,8 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
+	for(int i = 0; i < pair_size; i++)
+		pthread_mutex_unlock(&(pair[i].pair_lock));
 	return MPI_Waitall(count, array_of_requests, array_of_statuses);
 }
 
@@ -112,6 +127,17 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	int ret = MPI_Init_thread( argc, argv, required, provided );
 	reg_list = init_register_list();
 	init_fault_list();
+
+	fargs = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
+	fargs->uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+
+	struct uffdio_api uffdio_api;
+	uffdio_api.api = UFFD_API;
+	uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
+	assert(ioctl(fargs->uffd, UFFDIO_API, &uffdio_api) != -1);
+	
+	pthread_t uffd_thread;
+	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
 
 	return ret;
 }

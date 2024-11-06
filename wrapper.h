@@ -48,6 +48,8 @@ typedef struct fault_list {
 	int pos;
 } fault_list;
 
+extern struct fault_handler_args *fargs;
+
 extern reg_addr_list *reg_list;
 extern fault_list    flist;
 
@@ -80,7 +82,7 @@ reg_addr_list *realloc_register_list();
 bool add_reg_pair(char *region, int size);
 
 
-void uffd_register(char *addr, size_t size, int rank);
+void uffd_register(char *addr, size_t size, int rank, int first);
 void *handler(void *arg);
 
 extern recv_manager_t* manager;
