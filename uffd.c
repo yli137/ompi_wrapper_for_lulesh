@@ -21,7 +21,6 @@ void *handler(void *arg)
 {
 	struct fault_handler_args* fargs = (struct fault_handler_args*) arg;
 	struct uffd_msg msg;
-	size_t region_size = fargs->length;
 	ssize_t nread;
 
 	struct pollfd pollfd;
@@ -29,28 +28,14 @@ void *handler(void *arg)
 	pollfd.events = POLLIN;
 
 	int page_size = sysconf(_SC_PAGE_SIZE);
-	// Allocate and map a new page
 
-	int iter = 0;
 	while(poll(&pollfd, 1, -1) > 0){
 		nread = read(fargs->uffd, &msg, sizeof(msg));
-
-		if (nread == 0 || nread == -1) {
+		if (nread == 0 || nread == -1) 
 			continue;
-		}
 
 		// Handle the write fault
 		if (msg.event == UFFD_EVENT_PAGEFAULT) {
-			unsigned long print_fault_address = msg.arg.pagefault.address;
-#if 0
-			printf("thread %d thread# %d addr %ld caught a fault %lld WRITE %d WP %d MINOR %d WRITE+WP %d\n",
-					getpid(), fargs->rank, print_fault_address,
-					msg.arg.pagefault.flags,
-					UFFD_PAGEFAULT_FLAG_WRITE,
-					UFFD_PAGEFAULT_FLAG_WP,
-					UFFD_PAGEFAULT_FLAG_MINOR,
-					UFFD_PAGEFAULT_FLAG_WRITE | UFFD_PAGEFAULT_FLAG_WP);
-#endif
 			if (msg.arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP) {
 				unsigned long fault_address = msg.arg.pagefault.address;
 
@@ -76,40 +61,33 @@ void *handler(void *arg)
 				unsigned long fault_address = msg.arg.pagefault.address;
 
 				struct uffdio_writeprotect uffdio_wp;
-				//uffdio_wp.range.start = fault_address & ~(page_size - 1);
-				uffdio_wp.range.start = fault_address;
-				uffdio_wp.range.len = page_size;
 				uffdio_wp.mode = 0;
 
-				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-					perror("UFFDIO_WRITEPROTECT");
-					exit(EXIT_FAILURE);
-				}
-
-
-				for(int i = 0; i < pair_size; i++){
-					if(fault_address >= (unsigned long)pair[i].isend_addr &&
-							fault_address < (unsigned long)pair[i].isend_addr + pair[i].isend_size){
-
-						if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
-						int comp_ret = compress_lz4_buffer(pair[i].isend_addr, 
-								pair[i].isend_size,
-								pair[i].comp_addr, 
-								pair[i].comp_size);
-
-						pair[i].comp_size = comp_ret != 0 ? comp_ret : pair[i].comp_size;
-
-							pthread_mutex_unlock(&(pair[i].pair_lock));
+				pthread_mutex_lock(&creation_lock);
+				for(int i = 0; i < reg_list->pos; i++){
+					if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
+								fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+						uffdio_wp.range.len = reg_list->list[i].size;
+						pair[i].ready = 1;
+						
+						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+							perror("UFFDIO_WRITEPROTECT2");
+							exit(EXIT_FAILURE);
 						}
 					}
 				}
 
-				usleep(10);
+				pthread_mutex_unlock(&creation_lock);
+				
+#if 0
+				usleep(1);
 				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
 					perror("UFFDIO_WRITEPROTECT");
 					exit(EXIT_FAILURE);
 				}
+#endif
 
 			}
 		}
@@ -133,14 +111,6 @@ void uffd_register(char *addr, size_t size, int rank, int first){
 		int uffd = fargs->uffd;
 		assert(uffd != -1);
 
-#if 0
-		// Step 2: Register the memory with userfaultfd
-		struct uffdio_api uffdio_api;
-		uffdio_api.api = UFFD_API;
-		uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
-		assert(ioctl(uffd, UFFDIO_API, &uffdio_api) != -1);
-#endif
-
 		// Step 3: set up address and flags
 		struct uffdio_register uffdio_register;
 		uffdio_register.range.start = (unsigned long)region;
@@ -157,22 +127,6 @@ void uffd_register(char *addr, size_t size, int rank, int first){
 
 		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
-
-#if 0
-		// Step 4: Spawn a thread to handle page faults
-		pthread_t uffd_thread;
-
-		struct fault_handler_args *args = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
-		args->uffd = uffd;
-		args->length = region_size;
-		args->address = (void*)region;
-		args->rank = rank;
-
-		add_fault_args(uffd, region_size, (void*)region, rank);
-
-		printf("*************created a thread***************\n");
-		assert(pthread_create(&uffd_thread, NULL, handler, (void*)args) == 0);
-#endif
 	}
 }
 

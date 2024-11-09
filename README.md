@@ -45,3 +45,7 @@ Performance is not good. Handling fault may be taking way too long or detection 
 Addded a usleep after compression. Performance is good only when rank 0 do compression and all other ranks do not. 
 
 Guess is that I need to place thread accordingly.
+
+**11/8/2024**
+
+Compression thread and fault handler thread working separately. Need to merge them.

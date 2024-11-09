@@ -12,6 +12,16 @@
 #include <sys/syscall.h>
 #include <omp.h>
 
+#include <stdint.h>
+#include <sys/mman.h>
+#include <linux/userfaultfd.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <assert.h>
+#include <pthread.h>
+#include <sys/ioctl.h>
+#include <errno.h>
+
 int compress_lz4_buffer( const char *input_buffer, int input_size,
 		         char *output_buffer, int output_size )
 {
@@ -37,65 +47,45 @@ void try_decompress( char *input_buffer, int input_size )
 	free(decompressed_buffer);
 }
 
-#if 0
 void *starts_async_compression(void *arg)
 {
-	int num = *((int*)arg);
-
-	int rank;
-	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-
-	cpu_set_t cpuset;
-	CPU_ZERO(&cpuset);
-	if( num == 0 )
-		CPU_SET( rank + 8, &cpuset );
-	else	
-		CPU_SET( rank + 24, &cpuset );
-	int s = pthread_setaffinity_np( pthread_self(), sizeof(cpu_set_t), &cpuset );
-	if( s != 0 )
-		fprintf(stderr, "rank %d did not place the thread\n", rank);
-
-	int pair_ret, creation_ret, got_pair_size,
-	    comp_ret;
 	while(1){
-		creation_ret = pthread_mutex_trylock( &creation_lock );
+		pthread_mutex_lock(&creation_lock);
+		for(int i = 0; i < pair_size; i++){
+			// acquire pair lock
+			if(pthread_mutex_trylock(&(pair[i].pair_lock))){
+				if(pair[i].ready == 0){
+					// setup write protect
+					struct uffdio_writeprotect uffdio_wp;
+					
+					for(int i = 0; i < reg_list->pos; i++){
+						if((unsigned long)(pair[i].isend_addr) >= (unsigned long)(reg_list->list[i].region) && 
+								(unsigned long)(pair[i].isend_addr) < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+							uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+							uffdio_wp.range.len = reg_list->list[i].size;
+							uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+							pair[i].ready = 1;
 
-		if( creation_ret == 0 ){
-			got_pair_size = pair_size;
-			int locks[got_pair_size];
-			pthread_mutex_unlock( &creation_lock );
-
-			int start, end;
-			if( num == 0 ){
-				start = 0; 
-				end = got_pair_size/2;
-			} else {
-				start = got_pair_size/2;
-				end = got_pair_size;
-
-				if( start == 0 )
-					continue;
-			}
-
-			for( int i = start; i < end; i++ )
-				if( pair[i].isend_size > 1000 )
-					locks[i] = pthread_mutex_trylock( &(pair[i].pair_lock) );
-
-			for( int i = start; i < end; i++ ){
-				if( pair[i].isend_size > 1000 ){
-					if( locks[i] == 0 && pair[i].ready != 1 ){
-						comp_ret = compress_lz4_buffer( pair[i].isend_addr, pair[i].isend_size,
-								pair[i].comp_addr, pair[i].comp_size );
-						pair[i].comp_size = comp_ret != 0 ? comp_ret: pair[i].comp_size;
-						
-						pair[i].ready = 1;
-						pthread_mutex_unlock( &(pair[i].pair_lock) );
-					} else if( locks[i] == 0 && pair[i].ready == 1 ){
-						pthread_mutex_unlock( &(pair[i].pair_lock) );
+							if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+								perror("UFFDIO_WRITEPROTECT2");
+								exit(EXIT_FAILURE);
+							}
+						}
 					}
+
+					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+							pair[i].comp_addr, pair[i].comp_size);
+
+					if(comp_size < pair[i].isend_size)
+						pair[i].comp_size = comp_size;
+					pair[i].ready = 1;
 				}
+
+				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}
+		pthread_mutex_unlock(&creation_lock);
+
+		usleep(10);
 	}
 }
-#endif

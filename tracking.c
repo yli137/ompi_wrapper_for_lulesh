@@ -29,7 +29,7 @@ int find_and_create( char *addr, int size )
 		pair[0].isend_size = size;
 		pair[0].comp_addr = (char*)malloc(size + 100);
 		pair[0].comp_size = size + 100;
-		pair[0].created = -1;
+		pair[0].ready = -1;
 
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
@@ -41,7 +41,7 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].isend_size = size;
 		pair[pair_size].comp_addr = (char*)malloc(size+100);
 		pair[pair_size].comp_size = size + 100;
-		pair[pair_size].created = -1;
+		pair[pair_size].ready = -1;
 
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );
@@ -126,9 +126,6 @@ reg_addr_list *realloc_register_list()
 
 bool add_reg_pair(char *region, int size)
 {
-	unsigned long point = (unsigned long)region + size;
-	char *add_point = NULL;
-	int add_size = -1;
 	// This region starts with in a registered region
 	for(int i = 0; i < reg_list->pos; i++){
 		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&

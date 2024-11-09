@@ -26,7 +26,7 @@ typedef struct addr_pair {
 	int isend_size;
 	char *comp_addr;
 	int comp_size;
-	int created;
+	int ready;
 
 	pthread_mutex_t pair_lock;
 } Pair;
