@@ -58,34 +58,34 @@ void *starts_async_compression(void *arg)
 					// setup write protect
 					struct uffdio_writeprotect uffdio_wp;
 					
-					for(int i = 0; i < reg_list->pos; i++){
-						if((unsigned long)(pair[i].isend_addr) >= (unsigned long)(reg_list->list[i].region) && 
-								(unsigned long)(pair[i].isend_addr) < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-							uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
-							uffdio_wp.range.len = reg_list->list[i].size;
+					for(int j = 0; j < reg_list->pos; j++){
+						if((unsigned long)(pair[i].isend_addr) >= (unsigned long)(reg_list->list[j].region) && 
+								(unsigned long)(pair[j].isend_addr) < (unsigned long)(reg_list->list[j].region) + reg_list->list[j].size){
+							uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
+							uffdio_wp.range.len = reg_list->list[j].size;
 							uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-							pair[i].ready = 1;
 
 							if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
 								perror("UFFDIO_WRITEPROTECT2");
 								exit(EXIT_FAILURE);
 							}
+
+							int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+									pair[i].comp_addr, pair[i].comp_size);
+
+							if(comp_size < pair[i].isend_size){
+								pair[i].comp_size = comp_size;
+								pair[i].ready = 1;
+							}
+							//printf("Reset WP i %d ready %d size %d\n", i, pair[i].ready, pair[i].isend_size);
 						}
 					}
-
-					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-							pair[i].comp_addr, pair[i].comp_size);
-
-					if(comp_size < pair[i].isend_size)
-						pair[i].comp_size = comp_size;
-					pair[i].ready = 1;
 				}
 
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}
 		pthread_mutex_unlock(&creation_lock);
-
-		usleep(10);
+		usleep(1);
 	}
 }

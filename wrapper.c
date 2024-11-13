@@ -28,8 +28,6 @@ int recv_count = 0;
 int wait_count = 0;
 
 reg_addr_list *reg_list = NULL;
-
-int reg_first = 0;
 struct fault_handler_args *fargs = NULL;
 
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
@@ -42,31 +40,36 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int index = find_and_create((char*)buf, type_size);
-	if(index == -1 && type_size > 9000 && rank == 0){
-		
-		index = find_and_create((char*)buf, type_size);
+	//if(rank == 0)
+	//printf("size %d\n", type_size);
 
-		uffd_register((char*)buf, type_size, reg_first, reg_first);
-		pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
-				pair[index].isend_size,
-				pair[index].comp_addr,
-				pair[index].comp_size);
-	}
+	if(type_size == 60000){
+		int index = find_and_create((char*)buf, type_size);
+		if(index == -1 && pair_size < 2){
 
-#if 0
-	else if(rank == 0 && index != -1){// && type_size > 9000){
-		if(pair[index].comp_size < type_size){
-			pthread_mutex_lock(&(pair[index].pair_lock));
-			//printf("send index %d comp_size %d type_size %d\n",
-			//		index, pair[index].comp_size, type_size);
-			return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-					dest, tag, comm, request);
+			index = find_and_create((char*)buf, type_size);
+
+			//printf("register size %d\n", type_size);
+			uffd_register((char*)buf, type_size);
+			pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
+					pair[index].isend_size,
+					pair[index].comp_addr,
+					pair[index].comp_size);
+		} else if(index != -1){
+			if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
+				//printf("i %d ready %d comp_size %d type_size %d\n", 
+				//		index, pair[index].ready,
+				//		pair[index].comp_size, type_size);
+				pthread_mutex_lock(&(pair[index].pair_lock));
+				if(pair[index].ready == 1){
+					//printf("%d send index %d comp_size %d type_size %d\n",
+					//		rank, index, pair[index].comp_size, type_size);
+					return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+							dest, tag, comm, request);
+				}
+			}
 		}
 	}
-#endif
-
-	reg_first++;
 
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }

@@ -49,3 +49,15 @@ Guess is that I need to place thread accordingly.
 **11/8/2024**
 
 Compression thread and fault handler thread working separately. Need to merge them.
+
+**11/12/2024**
+
+Lock might run into some issue, race condition? but wasnt sure. 
+
+I think address lookup needs some work. Address might be within a region but it does not belong to the pair.
+
+Try adding more compression threads to the other two sets of cores, each handle one region.
+
+Currently, one thread can only handle one large region at this point.
+
+Might also need to check how much decompression cost, it is possible that decomrpession outweighs the performance gain from reduced size during communication

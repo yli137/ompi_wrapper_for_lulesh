@@ -82,7 +82,7 @@ reg_addr_list *realloc_register_list();
 bool add_reg_pair(char *region, int size);
 
 
-void uffd_register(char *addr, size_t size, int rank, int first);
+void uffd_register(char *addr, size_t size);
 void *handler(void *arg);
 
 extern recv_manager_t* manager;

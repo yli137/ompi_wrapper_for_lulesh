@@ -63,23 +63,34 @@ void *handler(void *arg)
 				struct uffdio_writeprotect uffdio_wp;
 				uffdio_wp.mode = 0;
 
+				int index;
 				pthread_mutex_lock(&creation_lock);
+				for(int i = 0; i < pair_size; i++){
+					if(fault_address >= (unsigned long)(pair[i].isend_addr) &&
+							fault_address < (unsigned long)(pair[i].isend_addr) + pair[i].isend_size){
+						index = i;
+						break;
+					}
+				}
+				pthread_mutex_unlock(&creation_lock);
+
 				for(int i = 0; i < reg_list->pos; i++){
 					if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
 								fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+						pthread_mutex_lock(&(pair[index].pair_lock));
 						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
 						uffdio_wp.range.len = reg_list->list[i].size;
-						pair[i].ready = 1;
+						pair[i].ready = 0;
+						//printf("Clear WP i %d size %d\n", index, pair[index].isend_size);
 						
 						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
 							perror("UFFDIO_WRITEPROTECT2");
 							exit(EXIT_FAILURE);
 						}
+						pthread_mutex_unlock(&(pair[index].pair_lock));
 					}
 				}
 
-				pthread_mutex_unlock(&creation_lock);
-				
 #if 0
 				usleep(1);
 				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
@@ -97,7 +108,7 @@ void *handler(void *arg)
 }
 
 
-void uffd_register(char *addr, size_t size, int rank, int first){
+void uffd_register(char *addr, size_t size){
 	int page_size = sysconf(_SC_PAGE_SIZE);
 	char *region = (char*)((unsigned long)addr & ~(page_size - 1));
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
