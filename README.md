@@ -68,3 +68,4 @@ multi thread compression, default 106s -> compression 104s.
 
 Need to place compression threads on 8-15 and 24-31.
 
+There is some issue with catching fault and doing compression. Some region are never caught. Is it not modified or matched to "early" pais in the pair list?
