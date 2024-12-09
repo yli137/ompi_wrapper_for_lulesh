@@ -51,6 +51,7 @@ void *starts_async_compression(void *arg)
 {
 	comp_thread_args cargs = *((comp_thread_args*)arg);
 
+	int did_comp = 0;
 	while(1){
 		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn+1) && i < pair_size; i++){
 			// acquire pair lock
@@ -75,6 +76,7 @@ void *starts_async_compression(void *arg)
 					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 							pair[i].comp_addr, pair[i].comp_size);
 
+					did_comp = 1;
 					pair[i].ready = 1;
 					if(comp_size < pair[i].isend_size){
 						pair[i].comp_size = comp_size;
@@ -84,6 +86,10 @@ void *starts_async_compression(void *arg)
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}
-		usleep(1);
+
+		if(did_comp == 0)
+			usleep(1);
+		else
+			did_comp = 0;
 	}
 }
