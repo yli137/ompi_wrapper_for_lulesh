@@ -41,9 +41,11 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	type_size *= count;
 
 	//if(rank == 0)
-	//printf("size %d\n", type_size);
+	//	printf("size %d\n", type_size);
 
-	if(type_size == 240000){
+	int size1 = 62000;
+
+	if(type_size >= size1){
 		int index = find_and_create((char*)buf, type_size);
 		if(index == -1){
 
@@ -57,13 +59,10 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 					pair[index].comp_size);
 		} else if(index != -1){
 			if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
-				//printf("i %d ready %d comp_size %d type_size %d\n", 
-				//		index, pair[index].ready,
-				//		pair[index].comp_size, type_size);
 				pthread_mutex_lock(&(pair[index].pair_lock));
 				if(pair[index].ready == 1){
-					printf("%d send index %d comp_size %d type_size %d\n",
-							rank, index, pair[index].comp_size, type_size);
+					printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
+							rank, index, pair[index].comp_size, type_size, pair_size);
 					return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 				}
@@ -132,8 +131,12 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	reg_list = init_register_list();
 	init_fault_list();
 
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	
 	fargs = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
 	fargs->uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+	fargs->rank = rank;
 
 	struct uffdio_api uffdio_api;
 	uffdio_api.api = UFFD_API;
@@ -143,26 +146,31 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	pthread_t uffd_thread;
 	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
 
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 8, &cpuset);
+	CPU_SET(rank + 16, &cpuset);
 
 	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
 	if (result != 0) {
 		perror("Error setting thread affinity");
 	}
 	
-	pthread_t compression_thread;
-	assert(pthread_create(&compression_thread, NULL, starts_async_compression, NULL) == 0);
+	pthread_t compression_thread1, compression_thread2;
+	comp_thread_args arg1 = {0, 1, rank};
+	comp_thread_args arg2 = {1, 2, rank};
+
+	assert(pthread_create(&compression_thread1, NULL, starts_async_compression, (void*)&arg1) == 0);
+	assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)&arg2) == 0);
 	
-	cpu_set_t cpuset_compression;
-	CPU_ZERO(&cpuset_compression);
-	CPU_SET(rank + 24, &cpuset_compression);
+	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
+	CPU_ZERO(&cpuset_compression1);
+	CPU_SET(rank + 8, &cpuset_compression1);
 	
-	assert(pthread_setaffinity_np(compression_thread, sizeof(cpu_set_t), &cpuset_compression) == 0);
+	CPU_ZERO(&cpuset_compression2);
+	CPU_SET(rank + 24, &cpuset_compression2);
+	
+	assert(pthread_setaffinity_np(compression_thread1, sizeof(cpu_set_t), &cpuset_compression1) == 0);
+	assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
 
 	return ret;
 }

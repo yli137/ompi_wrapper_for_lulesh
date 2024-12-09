@@ -50,12 +50,6 @@ void *handler(void *arg)
 					exit(EXIT_FAILURE);
 				}
 
-				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-					perror("UFFDIO_WRITEPROTECT (reapply)");
-					exit(EXIT_FAILURE);
-				}
-
 			} else if (msg.arg.pagefault.flags == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)){
 
 				unsigned long fault_address = msg.arg.pagefault.address;
@@ -64,30 +58,25 @@ void *handler(void *arg)
 				uffdio_wp.mode = 0;
 
 				int index;
-				pthread_mutex_lock(&creation_lock);
 				for(int i = 0; i < pair_size; i++){
 					if(fault_address >= (unsigned long)(pair[i].isend_addr) &&
 							fault_address < (unsigned long)(pair[i].isend_addr) + pair[i].isend_size){
-						index = i;
-						break;
+						pthread_mutex_lock(&(pair[i].pair_lock));
+						pair[i].ready = 0;
+						pthread_mutex_unlock(&(pair[i].pair_lock));
 					}
 				}
-				pthread_mutex_unlock(&creation_lock);
 
 				for(int i = 0; i < reg_list->pos; i++){
 					if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
 								fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-						pthread_mutex_lock(&(pair[index].pair_lock));
 						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
 						uffdio_wp.range.len = reg_list->list[i].size;
-						pair[i].ready = 0;
-						//printf("Clear WP i %d size %d\n", index, pair[index].isend_size);
 						
 						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
 							perror("UFFDIO_WRITEPROTECT2");
 							exit(EXIT_FAILURE);
 						}
-						pthread_mutex_unlock(&(pair[index].pair_lock));
 					}
 				}
 

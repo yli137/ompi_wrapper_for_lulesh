@@ -8,6 +8,14 @@
 
 extern int first_encounter;
 
+// compression thread structure
+typedef struct comp_thread_args {
+	int tn;
+	int total;
+	int rank;
+} comp_thread_args;
+
+
 // Structure to pass to the fault handler thread
 struct fault_handler_args {
     int uffd;

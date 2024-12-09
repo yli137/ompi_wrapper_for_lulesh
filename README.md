@@ -61,3 +61,10 @@ Try adding more compression threads to the other two sets of cores, each handle 
 Currently, one thread can only handle one large region at this point.
 
 Might also need to check how much decompression cost, it is possible that decomrpession outweighs the performance gain from reduced size during communication
+
+**12/9/2024**
+
+multi thread compression, default 106s -> compression 104s.
+
+Need to place compression threads on 8-15 and 24-31.
+
