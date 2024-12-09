@@ -33,8 +33,8 @@ struct fault_handler_args *fargs = NULL;
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	//int rank;
+	//MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	int type_size;
 	MPI_Type_size( type, &type_size );
@@ -45,34 +45,22 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 	int size1 = 240000;
 
-	if(type_size > size1){
+	//if(type_size >= size1){
 		int index = find_and_create((char*)buf, type_size);
 
-		if(index == -1 && pair_size < 2){
-
+		if(index == -1)
 			index = find_and_create((char*)buf, type_size);
 
-			//printf("register size %d\n", type_size);
-			uffd_register((char*)buf, type_size);
-			pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
-					pair[index].isend_size,
-					pair[index].comp_addr,
-					pair[index].comp_size);
-		} else if(index == 0){
-			printf("rank %d ready %d comp_size %d type_size %d\n", 
-					index, pair[index].ready,
-					pair[index].comp_size, type_size);
-			if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
-				if(pair[index].ready == 1){
-					pthread_mutex_lock(&(pair[index].pair_lock));
-					printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
-							rank, index, pair[index].comp_size, type_size, pair_size);
-					return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-							dest, tag, comm, request);
-				}
-			}
+		pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
+				pair[index].isend_size,
+				pair[index].comp_addr,
+				pair[index].comp_size);
+		if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
+			//printf("rank %d send %d type_size %d\n", rank, pair[index].comp_size, type_size);
+			return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+					dest, tag, comm, request);
 		}
-	}
+	//}
 
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
@@ -124,40 +112,10 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
-	for(int i = 0; i < pair_size; i++)
-		pthread_mutex_unlock(&(pair[i].pair_lock));
 	return MPI_Waitall(count, array_of_requests, array_of_statuses);
 }
 
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )
 {
-	int ret = MPI_Init_thread( argc, argv, required, provided );
-	reg_list = init_register_list();
-	init_fault_list();
-
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	
-	fargs = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
-	fargs->uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
-	fargs->rank = rank;
-
-	struct uffdio_api uffdio_api;
-	uffdio_api.api = UFFD_API;
-	uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
-	assert(ioctl(fargs->uffd, UFFDIO_API, &uffdio_api) != -1);
-	
-	pthread_t uffd_thread;
-	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
-
-	cpu_set_t cpuset;
-	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 8, &cpuset);
-
-	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
-	if (result != 0) {
-		perror("Error setting thread affinity");
-	}
-	
-	return ret;
+	return MPI_Init_thread( argc, argv, required, provided );
 }

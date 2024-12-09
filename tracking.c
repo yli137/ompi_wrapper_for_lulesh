@@ -34,10 +34,7 @@ int find_and_create( char *addr, int size )
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
 		return -1;
-	} 
-	
-#if 0 
-	else {
+	} else {
 
 		pair = (Pair*)realloc(pair, sizeof(Pair) * (pair_size+1));
 
@@ -51,7 +48,7 @@ int find_and_create( char *addr, int size )
 		pthread_mutex_unlock( &creation_lock );
 		return -1;
 	} 
-#endif
+
 	return -1;
 }
 
