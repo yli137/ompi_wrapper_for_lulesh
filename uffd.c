@@ -34,6 +34,7 @@ void *handler(void *arg)
 		if (nread == 0 || nread == -1) 
 			continue;
 
+		printf("got one\n");
 		// Handle the write fault
 		if (msg.event == UFFD_EVENT_PAGEFAULT) {
 			if (msg.arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP) {
@@ -55,15 +56,14 @@ void *handler(void *arg)
 				unsigned long fault_address = msg.arg.pagefault.address;
 
 				struct uffdio_writeprotect uffdio_wp;
-				uffdio_wp.mode = 0;
 
-				int index;
 				for(int i = 0; i < pair_size; i++){
 					if(fault_address >= (unsigned long)(pair[i].isend_addr) &&
 							fault_address < (unsigned long)(pair[i].isend_addr) + pair[i].isend_size){
-						pthread_mutex_lock(&(pair[i].pair_lock));
 						pair[i].ready = 0;
-						pthread_mutex_unlock(&(pair[i].pair_lock));
+						if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
+							pthread_mutex_unlock(&(pair[i].pair_lock));
+						}
 					}
 				}
 
@@ -72,6 +72,22 @@ void *handler(void *arg)
 								fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
 						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
 						uffdio_wp.range.len = reg_list->list[i].size;
+						uffdio_wp.mode = 0;
+						
+						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+							perror("UFFDIO_WRITEPROTECT2");
+							exit(EXIT_FAILURE);
+						}
+					}
+				}
+				usleep(1);
+				
+				for(int i = 0; i < reg_list->pos; i++){
+					if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
+								fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+						uffdio_wp.range.len = reg_list->list[i].size;
+						uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 						
 						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
 							perror("UFFDIO_WRITEPROTECT2");
@@ -80,14 +96,27 @@ void *handler(void *arg)
 					}
 				}
 
-#if 0
-				usleep(1);
-				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-					perror("UFFDIO_WRITEPROTECT");
-					exit(EXIT_FAILURE);
+				printf("pair_size %d\n", pair_size);
+				for(int i = 0; i < pair_size; i++){
+					printf("%d\n", i);
+					if(fault_address >= (unsigned long)(pair[i].isend_addr) &&
+							fault_address < (unsigned long)(pair[i].isend_addr) + pair[i].isend_size){
+						printf("try_lock\n");
+						if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
+							printf("send_addr %p size %u comp_addr %p\n", 
+									pair[i].isend_addr, pair[i].isend_size,
+									pair[i].comp_addr);
+							int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+									pair[i].comp_addr, pair[i].comp_size);
+
+							pair[i].ready = 1;
+							printf("comp_size %d\n", comp_size);
+							if(comp_size < pair[i].isend_size)
+								pair[i].comp_size = comp_size;
+							pthread_mutex_unlock(&(pair[i].pair_lock));
+						}
+					}
 				}
-#endif
 
 			}
 		}
