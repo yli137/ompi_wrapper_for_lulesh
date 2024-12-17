@@ -55,39 +55,35 @@ void *handler(void *arg)
 				unsigned long fault_address = msg.arg.pagefault.address;
 
 				struct uffdio_writeprotect uffdio_wp;
-				uffdio_wp.mode = 0;
 
-				int index;
+				//pthread_mutex_lock(&reg_lock);
+				for(int i = 0; i < reg_list->pos; i++){
+					//if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
+					//		fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+
+						//if(fargs->rank == 0)
+						//	printf("Mark dirty %d pos %d\n", i, reg_list->pos);
+						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+						uffdio_wp.range.len = reg_list->list[i].size;
+						uffdio_wp.mode = 0;
+
+						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+							perror("UFFDIO_WRITEPROTECT2");
+							exit(EXIT_FAILURE);
+						}
+						reg_list->list[i].dirty = 1;
+					//}
+				}
+				//pthread_mutex_unlock(&reg_lock);
+
 				for(int i = 0; i < pair_size; i++){
-					if(fault_address >= (unsigned long)(pair[i].isend_addr) &&
-							fault_address < (unsigned long)(pair[i].isend_addr) + pair[i].isend_size){
+					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
+							fault_address < (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
 						pthread_mutex_lock(&(pair[i].pair_lock));
 						pair[i].ready = 0;
 						pthread_mutex_unlock(&(pair[i].pair_lock));
 					}
 				}
-
-				for(int i = 0; i < reg_list->pos; i++){
-					if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
-								fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
-						uffdio_wp.range.len = reg_list->list[i].size;
-						
-						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-							perror("UFFDIO_WRITEPROTECT2");
-							exit(EXIT_FAILURE);
-						}
-					}
-				}
-
-#if 0
-				usleep(1);
-				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-					perror("UFFDIO_WRITEPROTECT");
-					exit(EXIT_FAILURE);
-				}
-#endif
 
 			}
 		}
@@ -103,15 +99,12 @@ void uffd_register(char *addr, size_t size){
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
 
 	if(add_reg_pair(region, region_size)){
-		char *region = reg_list->list[reg_list->pos-1].region;
-		size_t region_size = reg_list->list[reg_list->pos-1].size;
+		char *region = reg_list->list[reg_list->pos].region;
+		size_t region_size = reg_list->list[reg_list->pos].size;
 
-		// Step 1: Create a userfaultfd object
-		//int uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
 		int uffd = fargs->uffd;
 		assert(uffd != -1);
 
-		// Step 3: set up address and flags
 		struct uffdio_register uffdio_register;
 		uffdio_register.range.start = (unsigned long)region;
 		uffdio_register.range.len = region_size;
@@ -125,8 +118,10 @@ void uffd_register(char *addr, size_t size){
 		uffdio_wp.mode = 0;
 		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
-		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+		//uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+		//assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+
+		reg_list->pos++;
 	}
 }
 

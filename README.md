@@ -69,3 +69,15 @@ multi thread compression, default 106s -> compression 104s.
 Need to place compression threads on 8-15 and 24-31.
 
 There is some issue with catching fault and doing compression. Some region are never caught. Is it not modified or matched to "early" pais in the pair list?
+
+**12/14/2024**
+
+Original code did not consider the "fault address" is the aligned page size address. Added "aligned address" when adding isend pairs for uffd to track which fault address belongs to
+
+**12/16/2024**
+
+Need to add an additional lock and bit for register pairs. Compress pairs need to separated from register pairs since compress pairs could overlap and register pairs are chopped off from overlap part.
+
+Currently doing uffd reg list and compression pair list separately. Each list has a "dirty" int to look at. 
+
+Adding compression or adding 100 ms would cause program to halt. Need to draw critical path and see why injecting some noise would halt the threads.

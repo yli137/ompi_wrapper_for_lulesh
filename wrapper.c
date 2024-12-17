@@ -44,9 +44,20 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	//	printf("size %d\n", type_size);
 
 	int size1 = 240000;
+	int index = -1;
 
 	if(type_size >= size1){
-		int index = find_and_create((char*)buf, type_size);
+		index = find_and_create((char*)buf, type_size);
+		//if(rank == 0)
+		//	printf("register %p %d\n", buf, type_size);
+		if(index == -1)
+			uffd_register((char*)buf, type_size);
+	}
+
+#if 0
+	if(type_size >= size1){
+		index = find_and_create((char*)buf, type_size);
+
 		if(index == -1){
 
 			index = find_and_create((char*)buf, type_size);
@@ -57,12 +68,21 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 					pair[index].isend_size,
 					pair[index].comp_addr,
 					pair[index].comp_size);
+			pair[index].ready = 1;
+
+			if(pair[index].ready == 1 && pair[index].comp_size != 0){
+				//if(rank == 0)
+				//	printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
+				//			rank, index, pair[index].comp_size, type_size, pair_size);
+				return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+						dest, tag, comm, request);
+			}
 		} else if(index != -1){
 			if(pair[index].comp_size < type_size){
-				while(pair[index].ready == 0){}
 
 				pthread_mutex_lock(&(pair[index].pair_lock));
 				if(pair[index].ready == 1 && pair[index].comp_size != 0){
+					if(rank == 0)
 					printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
 							rank, index, pair[index].comp_size, type_size, pair_size);
 					return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
@@ -71,8 +91,18 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			}
 		}
 	}
+#endif
 
-	printf("--- %d send comp_size %d\n", rank, type_size);
+	//if(rank == 0 && type_size >= size1)
+	//printf("--- %d index %d send comp_size %d\n", rank, index, type_size);
+
+	if(rank == 0){
+		for(int i = 0; i < pair_size; i++)
+			printf("i %d pair_size %d ready %d\n", i, pair_size, pair[i].ready);
+		for(int i = 0; i < reg_list->pos; i++)
+			printf("reg i %d pos %d dirty %d\n", i, reg_list->pos, reg_list->list[i].dirty);
+	}
+
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
 
@@ -123,8 +153,10 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
-	for(int i = 0; i < pair_size; i++)
+	for(int i = 0; i < pair_size; i++){
 		pthread_mutex_unlock(&(pair[i].pair_lock));
+	}
+	
 	return MPI_Waitall(count, array_of_requests, array_of_statuses);
 }
 
@@ -159,11 +191,17 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	}
 	
 	pthread_t compression_thread1, compression_thread2;
-	comp_thread_args arg1 = {0, 1, rank};
-	comp_thread_args arg2 = {1, 2, rank};
+	comp_thread_args *arg1 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
+	arg1->tn = 0;
+	arg1->total = 2;
+	arg1->rank = rank;
+	comp_thread_args *arg2 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
+	arg2->tn = 1;
+	arg2->total = 2;
+	arg2->rank = rank;
 
-	assert(pthread_create(&compression_thread1, NULL, starts_async_compression, (void*)&arg1) == 0);
-	assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)&arg2) == 0);
+	assert(pthread_create(&compression_thread1, NULL, starts_async_compression, (void*)arg1) == 0);
+	//assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
 	
 	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
 	CPU_ZERO(&cpuset_compression1);
@@ -173,7 +211,7 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	CPU_SET(rank + 24, &cpuset_compression2);
 	
 	assert(pthread_setaffinity_np(compression_thread1, sizeof(cpu_set_t), &cpuset_compression1) == 0);
-	assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
+	//assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
 
 	return ret;
 }

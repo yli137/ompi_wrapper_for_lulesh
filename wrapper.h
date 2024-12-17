@@ -36,12 +36,18 @@ typedef struct addr_pair {
 	int comp_size;
 	int ready;
 
+	char *aligned_addr;
+	size_t aligned_size;
+
 	pthread_mutex_t pair_lock;
 } Pair;
 
 typedef struct register_addr {
 	char *region;
 	int size;
+	int dirty;
+
+	pthread_mutex_t reg_lock;
 } reg_addr;
 
 typedef struct register_addr_list {
@@ -64,6 +70,7 @@ extern fault_list    flist;
 extern Pair *pair;
 extern int pair_size;
 extern pthread_mutex_t creation_lock;
+extern pthread_mutex_t reg_lock;
 
 extern int reg_first;
 

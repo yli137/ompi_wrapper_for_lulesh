@@ -8,7 +8,8 @@
 Pair *pair;
 int pair_size = -1;
 
-pthread_mutex_t creation_lock;
+pthread_mutex_t creation_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t reg_lock = PTHREAD_MUTEX_INITIALIZER;
 fault_list flist;
 
 int find_and_create( char *addr, int size )
@@ -29,7 +30,10 @@ int find_and_create( char *addr, int size )
 		pair[0].isend_size = size;
 		pair[0].comp_addr = (char*)malloc(size + 100);
 		pair[0].comp_size = size + 100;
-		pair[0].ready = -1;
+		pair[0].ready = 0;
+	
+		pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
+		pair[0].aligned_size = (size + 4095) / 4096 * 4096;
 
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
@@ -42,8 +46,11 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].isend_size = size;
 		pair[pair_size].comp_addr = (char*)malloc(size+100);
 		pair[pair_size].comp_size = size + 100;
-		pair[pair_size].ready = -1;
+		pair[pair_size].ready = 0;
 
+		pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
+		pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
+		
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );
 		return -1;
@@ -127,6 +134,9 @@ reg_addr_list *realloc_register_list()
 
 bool add_reg_pair(char *region, int size)
 {
+
+	//pthread_mutex_lock(&reg_lock);
+
 	// This region starts with in a registered region
 	for(int i = 0; i < reg_list->pos; i++){
 		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&
@@ -138,28 +148,18 @@ bool add_reg_pair(char *region, int size)
 		}
 	}
 
-#if 0
-	// This region starts before all addresses but the later part overlap with one of the registered region
-	for(int i = 0; i < reg_list->pos; i++){
-		if((unsigned long)region < (unsigned long)(reg_list->list[i].region) &&
-				(unsigned long)region + size > (unsigned long)(reg_list->list[i].region)){
-			int result_size = (unsigned long)(reg_list->list[i].region) - (unsigned long)region;
-			
-			if(reg_list->pos == reg_list->size)
-				reg_list = realloc_register_list();
-			reg_list->list[reg_list->pos].region = region;
-			reg_list->list[reg_list->pos].size = result_size;
-			reg_list->pos++;
-			return true;
-		}
-	}
-#endif
-
 	if(reg_list->pos == reg_list->size)
 		reg_list = realloc_register_list();
 	reg_list->list[reg_list->pos].region = region;
 	reg_list->list[reg_list->pos].size = size;
-	reg_list->pos++;
+	reg_list->list[reg_list->pos].dirty = 1;
+		
+	//pthread_mutex_unlock( &(reg_list->list[reg_list->pos].reg_lock) );
+	reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;
+	
+	//reg_list->pos++;
+
+	//pthread_mutex_unlock(&reg_lock);
 	return true;
 }
 

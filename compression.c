@@ -53,43 +53,45 @@ void *starts_async_compression(void *arg)
 
 	int did_comp = 0;
 	while(1){
-		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn+1) && i < pair_size; i++){
-			// acquire pair lock
-			if( pthread_mutex_trylock(&(pair[i].pair_lock)) == 0 ){
-				if(pair[i].ready == 0){
-					// setup write protect
-					struct uffdio_writeprotect uffdio_wp;
+		usleep(10);
+		struct uffdio_writeprotect uffdio_wp;
 
-					for(int j = 0; j < reg_list->pos; j++){
-						if((unsigned long)(pair[i].isend_addr) >= (unsigned long)(reg_list->list[j].region) && 
-								(unsigned long)(pair[j].isend_addr) < (unsigned long)(reg_list->list[j].region) + reg_list->list[j].size && pair[i].ready == 0){
-							uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
-							uffdio_wp.range.len = reg_list->list[j].size;
-							uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+		//pthread_mutex_lock(&reg_lock);
+		for(int j = 0; j < reg_list->pos; j++){
+			//if(cargs.rank == 0)
+			//	printf("grab reg %d dirty %d iter %d\n", j, reg_list->list[j].dirty, did_comp);
+			if(reg_list->list[j].dirty == 1){
+				//if(cargs.rank == 0)
+				//	printf("WP on %d pos %d\n", j, reg_list->pos);
 
-							if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-								perror("UFFDIO_WRITEPROTECT2");
-								exit(EXIT_FAILURE);
-							}
-						}
-					}
-					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-							pair[i].comp_addr, pair[i].comp_size);
+				uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
+				uffdio_wp.range.len = reg_list->list[j].size;
+				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-					did_comp = 1;
-					pair[i].ready = 1;
-					if(comp_size < pair[i].isend_size){
-						pair[i].comp_size = comp_size;
-					}
+				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+					perror("UFFDIO_WRITEPROTECT2");
+					exit(EXIT_FAILURE);
 				}
+				reg_list->list[j].dirty = 0;
+			}
+		}
+		//pthread_mutex_unlock(&reg_lock);
 
+		for(int i = 0; i < pair_size; i++){
+			// try do lock differently
+			if( pthread_mutex_trylock(&(pair[i].pair_lock)) == 0 ){
+				//if(cargs.rank == 0)
+				//	printf("grab lock ready %d iter %d\n", pair[i].ready, did_comp++);
+				if(pair[i].ready == 0){
+					//int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+					//		pair[i].comp_addr, pair[i].comp_size);
+
+					pair[i].ready = 1;
+					//if(comp_size < pair[i].isend_size)
+					//	pair[i].comp_size = comp_size;
+				}
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}
-
-		if(did_comp == 0)
-			usleep(1);
-		else
-			did_comp = 0;
 	}
 }
