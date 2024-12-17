@@ -81,3 +81,9 @@ Need to add an additional lock and bit for register pairs. Compress pairs need t
 Currently doing uffd reg list and compression pair list separately. Each list has a "dirty" int to look at. 
 
 Adding compression or adding 100 ms would cause program to halt. Need to draw critical path and see why injecting some noise would halt the threads.
+
+Solving this halt is by flipping one of the uffd or compression thread sequence. uffd -> 1. clear pair 2. clear uffd reg. compression -> 1. WP on 2. do compression on pairs
+
+Lock in Isend is causing some issue.
+
+Removing lock in Isend has all other ranks (except rank 0) not compressing in time.

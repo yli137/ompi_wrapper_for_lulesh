@@ -46,6 +46,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	int size1 = 240000;
 	int index = -1;
 
+#if 0
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);
 		//if(rank == 0)
@@ -53,36 +54,20 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		if(index == -1)
 			uffd_register((char*)buf, type_size);
 	}
+#endif
 
-#if 0
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);
 
 		if(index == -1){
-
 			index = find_and_create((char*)buf, type_size);
-
-			//printf("register size %d\n", type_size);
 			uffd_register((char*)buf, type_size);
-			pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
-					pair[index].isend_size,
-					pair[index].comp_addr,
-					pair[index].comp_size);
-			pair[index].ready = 1;
 
-			if(pair[index].ready == 1 && pair[index].comp_size != 0){
-				//if(rank == 0)
-				//	printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
-				//			rank, index, pair[index].comp_size, type_size, pair_size);
-				return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-						dest, tag, comm, request);
-			}
 		} else if(index != -1){
 			if(pair[index].comp_size < type_size){
 
-				pthread_mutex_lock(&(pair[index].pair_lock));
+				//pthread_mutex_lock(&(pair[index].pair_lock));
 				if(pair[index].ready == 1 && pair[index].comp_size != 0){
-					if(rank == 0)
 					printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
 							rank, index, pair[index].comp_size, type_size, pair_size);
 					return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
@@ -91,18 +76,9 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			}
 		}
 	}
-#endif
 
 	//if(rank == 0 && type_size >= size1)
 	//printf("--- %d index %d send comp_size %d\n", rank, index, type_size);
-
-	if(rank == 0){
-		for(int i = 0; i < pair_size; i++)
-			printf("i %d pair_size %d ready %d\n", i, pair_size, pair[i].ready);
-		for(int i = 0; i < reg_list->pos; i++)
-			printf("reg i %d pos %d dirty %d\n", i, reg_list->pos, reg_list->list[i].dirty);
-	}
-
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
 
@@ -154,7 +130,7 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
 	for(int i = 0; i < pair_size; i++){
-		pthread_mutex_unlock(&(pair[i].pair_lock));
+	//	pthread_mutex_unlock(&(pair[i].pair_lock));
 	}
 	
 	return MPI_Waitall(count, array_of_requests, array_of_statuses);

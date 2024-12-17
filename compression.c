@@ -51,31 +51,33 @@ void *starts_async_compression(void *arg)
 {
 	comp_thread_args cargs = *((comp_thread_args*)arg);
 
+	struct uffdio_writeprotect uffdio_wp;
 	int did_comp = 0;
 	while(1){
 		usleep(10);
-		struct uffdio_writeprotect uffdio_wp;
 
-		//pthread_mutex_lock(&reg_lock);
 		for(int j = 0; j < reg_list->pos; j++){
 			//if(cargs.rank == 0)
 			//	printf("grab reg %d dirty %d iter %d\n", j, reg_list->list[j].dirty, did_comp);
-			if(reg_list->list[j].dirty == 1){
-				//if(cargs.rank == 0)
-				//	printf("WP on %d pos %d\n", j, reg_list->pos);
+			
+			if( pthread_mutex_lock(&(reg_list->list[j].reg_lock)) == 0 ){
+				if(reg_list->list[j].dirty == 1){
+					//if(cargs.rank == 0)
+					//	printf("WP on %d pos %d\n", j, reg_list->pos);
 
-				uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
-				uffdio_wp.range.len = reg_list->list[j].size;
-				uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+					uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
+					uffdio_wp.range.len = reg_list->list[j].size;
+					uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-				if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-					perror("UFFDIO_WRITEPROTECT2");
-					exit(EXIT_FAILURE);
+					if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+						perror("UFFDIO_WRITEPROTECT2");
+						exit(EXIT_FAILURE);
+					}
+					reg_list->list[j].dirty = 0;
 				}
-				reg_list->list[j].dirty = 0;
+				pthread_mutex_unlock(&(reg_list->list[j].reg_lock));
 			}
 		}
-		//pthread_mutex_unlock(&reg_lock);
 
 		for(int i = 0; i < pair_size; i++){
 			// try do lock differently
@@ -83,12 +85,12 @@ void *starts_async_compression(void *arg)
 				//if(cargs.rank == 0)
 				//	printf("grab lock ready %d iter %d\n", pair[i].ready, did_comp++);
 				if(pair[i].ready == 0){
-					//int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-					//		pair[i].comp_addr, pair[i].comp_size);
-
+					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+							pair[i].comp_addr, pair[i].comp_size);
+					
 					pair[i].ready = 1;
-					//if(comp_size < pair[i].isend_size)
-					//	pair[i].comp_size = comp_size;
+					if(comp_size < pair[i].isend_size)
+						pair[i].comp_size = comp_size;
 				}
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}

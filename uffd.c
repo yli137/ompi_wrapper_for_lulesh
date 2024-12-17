@@ -55,12 +55,17 @@ void *handler(void *arg)
 				unsigned long fault_address = msg.arg.pagefault.address;
 
 				struct uffdio_writeprotect uffdio_wp;
+				for(int i = 0; i < pair_size; i++){
+					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
+							fault_address <= (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
+						pthread_mutex_lock(&(pair[i].pair_lock));
+						pair[i].ready = 0;
+						pthread_mutex_unlock(&(pair[i].pair_lock));
+					}
+				}
 
-				//pthread_mutex_lock(&reg_lock);
 				for(int i = 0; i < reg_list->pos; i++){
-					//if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
-					//		fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-
+					if( pthread_mutex_lock(&(reg_list->list[i].reg_lock)) == 0 ){
 						//if(fargs->rank == 0)
 						//	printf("Mark dirty %d pos %d\n", i, reg_list->pos);
 						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
@@ -72,19 +77,9 @@ void *handler(void *arg)
 							exit(EXIT_FAILURE);
 						}
 						reg_list->list[i].dirty = 1;
-					//}
-				}
-				//pthread_mutex_unlock(&reg_lock);
-
-				for(int i = 0; i < pair_size; i++){
-					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
-							fault_address < (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
-						pthread_mutex_lock(&(pair[i].pair_lock));
-						pair[i].ready = 0;
-						pthread_mutex_unlock(&(pair[i].pair_lock));
+						pthread_mutex_unlock(&(reg_list->list[i].reg_lock));
 					}
 				}
-
 			}
 		}
 	}
