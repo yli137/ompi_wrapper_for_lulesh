@@ -88,9 +88,10 @@ void *starts_async_compression(void *arg)
 					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 							pair[i].comp_addr, pair[i].comp_size);
 					
-					pair[i].ready = 1;
-					if(comp_size < pair[i].isend_size)
+					if(comp_size < pair[i].isend_size && comp_size != 0){
 						pair[i].comp_size = comp_size;
+						pair[i].ready = 1;
+					}
 				}
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}

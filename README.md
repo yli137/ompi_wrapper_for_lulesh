@@ -87,3 +87,11 @@ Solving this halt is by flipping one of the uffd or compression thread sequence.
 Lock in Isend is causing some issue.
 
 Removing lock in Isend has all other ranks (except rank 0) not compressing in time.
+
+**12/20/2024**
+
+locks between isend and uffd and compression has a conflict.
+
+locks only check ready bit instead of locking the entire section from isend to waitall
+
+lz4 compression fails sometimes, need to check if lz4 returns a 0 or not, if so, do not reset ready bit

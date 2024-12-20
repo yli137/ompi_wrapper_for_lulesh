@@ -64,16 +64,32 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			uffd_register((char*)buf, type_size);
 
 		} else if(index != -1){
+			pthread_mutex_lock(&(pair[index].pair_lock));
+			
 			if(pair[index].comp_size < type_size){
 
-				//pthread_mutex_lock(&(pair[index].pair_lock));
+#if 0
+				while(1){
+					if(pair[index].ready == 1)
+						break;
+					pthread_mutex_unlock(&(pair[index].pair_lock));
+					usleep(10);
+					pthread_mutex_lock(&(pair[index].pair_lock));
+				}
+#endif
+
+				//printf("%d send index %d ready %d comp_size %d type_size %d pair_size %d\n",
+				//		rank, index, pair[index].ready, pair[index].comp_size, type_size, pair_size);
 				if(pair[index].ready == 1 && pair[index].comp_size != 0){
 					printf("%d send index %d comp_size %d type_size %d pair_size %d\n",
 							rank, index, pair[index].comp_size, type_size, pair_size);
-					return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
+					pthread_mutex_unlock(&(pair[index].pair_lock));
+					return comp_ret;
 				}
 			}
+			pthread_mutex_unlock(&(pair[index].pair_lock));
 		}
 	}
 
@@ -129,8 +145,10 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	for(int i = 0; i < pair_size; i++){
-	//	pthread_mutex_unlock(&(pair[i].pair_lock));
+		pthread_mutex_unlock(&(pair[i].pair_lock));
 	}
 	
 	return MPI_Waitall(count, array_of_requests, array_of_statuses);
