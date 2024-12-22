@@ -69,6 +69,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			if(pair[index].comp_size < type_size){
 				//printf("%d send index %d ready %d comp_size %d type_size %d pair_size %d\n",
 				//		rank, index, pair[index].ready, pair[index].comp_size, type_size, pair_size);
+				pair[index].comp_time = MPI_Wtime();
 				int comp_size = compress_lz4_buffer(pair[index].isend_addr, pair[index].isend_size,
 						pair[index].comp_addr, pair[index].comp_size);
 
@@ -76,17 +77,20 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 					pair[index].comp_size = comp_size;
 					pair[index].ready = 1;
 					pair[index].thread = 0;
-					pair[index].comp_time = MPI_Wtime();
 				}
 				if(pair[index].ready == 1 && pair[index].comp_size != 0){
 					pair[index].send_time = MPI_Wtime();
 
-					printf("%d send index %d comp_size %d type_size %d pair_size %d comp_time %.3f send_time %.3f difference %.9f thread %d\n",
+					printf("%d send index %d comp_size %d type_size %d pair_size %d comp_time %.3f send_time %.3f last_fault %.9f difference %.9f gap %.9f thread %d faults %d\n",
 							rank, index, pair[index].comp_size, type_size, pair_size,
-							pair[index].comp_time, pair[index].send_time, pair[index].send_time - pair[index].comp_time,
-							pair[index].thread);
+							pair[index].comp_time, pair[index].send_time, 
+							pair[index].last_fault,
+							pair[index].send_time - pair[index].comp_time,
+							pair[index].send_time - pair[index].last_fault,
+							pair[index].thread, pair[index].faults);
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
+					pair[index].faults = 0;
 					pthread_mutex_unlock(&(pair[index].pair_lock));
 					return comp_ret;
 				}

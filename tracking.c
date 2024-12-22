@@ -36,6 +36,7 @@ int find_and_create( char *addr, int size )
 		pair[0].aligned_size = (size + 4095) / 4096 * 4096;
 
 		pair[0].comp_time = 0;
+		pair[0].faults = 0;
 
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
@@ -54,6 +55,7 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
 		
 		pair[pair_size].comp_time = 0;
+		pair[pair_size].faults = 0;
 		
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );

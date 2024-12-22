@@ -53,6 +53,7 @@ void *handler(void *arg)
 			} else if (msg.arg.pagefault.flags == (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)){
 
 				unsigned long fault_address = msg.arg.pagefault.address;
+				double last_fault = MPI_Wtime();
 
 				struct uffdio_writeprotect uffdio_wp;
 				for(int i = 0; i < pair_size; i++){
@@ -60,6 +61,8 @@ void *handler(void *arg)
 							fault_address <= (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
 						pthread_mutex_lock(&(pair[i].pair_lock));
 						pair[i].ready = 0;
+						pair[i].faults++;
+						pair[i].last_fault = last_fault;
 						pthread_mutex_unlock(&(pair[i].pair_lock));
 					}
 				}

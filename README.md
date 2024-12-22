@@ -103,3 +103,5 @@ uffd's read is probably reading way too much write faults, need to find a way to
 uffd's WP is keeping lulesh from moving forward, while too many write faults are being detected and not the last one.
 
 Going to new branch to add a "wall clock" for each pair. When a pair is detected as dirty, wait for certain iteration. Then set WP on and do compression. 
+
+Added all measurements, gap, last fault time, isend time, etc..

@@ -38,8 +38,10 @@ typedef struct addr_pair {
 
 	double comp_time;
 	double send_time;
+	double last_fault;
 
 	int thread;
+	int faults;
 
 	char *aligned_addr;
 	size_t aligned_size;
