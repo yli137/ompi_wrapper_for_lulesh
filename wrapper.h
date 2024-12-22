@@ -39,6 +39,8 @@ typedef struct addr_pair {
 	double comp_time;
 	double send_time;
 
+	int thread;
+
 	char *aligned_addr;
 	size_t aligned_size;
 

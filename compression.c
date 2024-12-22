@@ -83,14 +83,14 @@ void *starts_async_compression(void *arg)
 				//if(cargs.rank == 0)
 				//	printf("doing compression %d pair_size %d\n", i, pair_size);
 				if(pair[i].ready == 0){
+					pair[i].comp_time = MPI_Wtime();
 					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 							pair[i].comp_addr, pair[i].comp_size);
 					
 					if(comp_size < pair[i].isend_size && comp_size != 0){
 						pair[i].comp_size = comp_size;
 						pair[i].ready = 1;
-
-						pair[i].comp_time = MPI_Wtime();
+						pair[i].thread = 1;
 					}
 				}
 				pthread_mutex_unlock(&(pair[i].pair_lock));
