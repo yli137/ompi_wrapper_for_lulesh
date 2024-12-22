@@ -54,12 +54,9 @@ void *starts_async_compression(void *arg)
 	struct uffdio_writeprotect uffdio_wp;
 	int did_comp = 0;
 	while(1){
-		usleep(10);
+		usleep(1);
 
 		for(int j = 0; j < reg_list->pos; j++){
-			//if(cargs.rank == 0)
-			//	printf("grab reg %d dirty %d iter %d\n", j, reg_list->list[j].dirty, did_comp);
-			
 			if( pthread_mutex_lock(&(reg_list->list[j].reg_lock)) == 0 ){
 				if(reg_list->list[j].dirty == 1){
 					//if(cargs.rank == 0)
@@ -79,11 +76,12 @@ void *starts_async_compression(void *arg)
 			}
 		}
 
-		for(int i = 0; i < pair_size; i++){
+		//for(int i = 0; i < pair_size; i++){
+		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn + 1) && i < pair_size; i++){
 			// try do lock differently
 			if( pthread_mutex_trylock(&(pair[i].pair_lock)) == 0 ){
 				//if(cargs.rank == 0)
-				//	printf("grab lock ready %d iter %d\n", pair[i].ready, did_comp++);
+				//	printf("doing compression %d pair_size %d\n", i, pair_size);
 				if(pair[i].ready == 0){
 					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 							pair[i].comp_addr, pair[i].comp_size);
@@ -91,6 +89,8 @@ void *starts_async_compression(void *arg)
 					if(comp_size < pair[i].isend_size && comp_size != 0){
 						pair[i].comp_size = comp_size;
 						pair[i].ready = 1;
+
+						pair[i].comp_time = MPI_Wtime();
 					}
 				}
 				pthread_mutex_unlock(&(pair[i].pair_lock));
