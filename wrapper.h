@@ -6,7 +6,12 @@
 #include <time.h>
 #include <openssl/sha.h>
 
-extern int first_encounter;
+#include "hashset.h"
+#include "hashset_itr.h"
+
+
+extern hashset_t seen_addr;
+
 
 // compression thread structure
 typedef struct comp_thread_args {

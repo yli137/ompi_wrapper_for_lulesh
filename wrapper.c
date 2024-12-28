@@ -22,6 +22,12 @@
 #include <fcntl.h>
 #include <errno.h>
 
+#include "hashset.h"
+#include "hashset_itr.h"
+
+
+hashset_t seen_addr;
+
 
 recv_manager_t* manager = NULL;
 int recv_count = 0;
@@ -163,6 +169,9 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
+	
+	// init registration list, hashset for seen address 
+	seen_addr = hashset_create();
 	reg_list = init_register_list();
 	init_fault_list();
 
