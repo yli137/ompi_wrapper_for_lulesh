@@ -22,6 +22,8 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 
+int last_comp_index = 0;
+
 int compress_lz4_buffer( const char *input_buffer, int input_size,
 		char *output_buffer, int output_size )
 {
@@ -77,12 +79,21 @@ void *starts_async_compression(void *arg)
 		}
 
 		pthread_mutex_lock(&cache_lock);
-		if(cache->size > 0)
+		if(cache->size > 0){
+#if 0
+			if(cargs.rank == 0){
+				printf("remove\n");
+				print_cache(cache);
+				printf("\n");
+			}
+#endif
 			node = remove_lru(cache);
+		}
 		pthread_mutex_unlock(&cache_lock);
 
-		for(int i = 0; i < pair_size; i++){
-			if(node->key == (unsigned long)(pair[i].isend_addr) && node->value == (size_t)(pair[i].isend_size)){
+		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn + 1) && i < pair_size; i++){
+		//for(int i = 0; i < pair_size; i++){
+			if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
 				pthread_mutex_lock(&(pair[i].pair_lock));
 				int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 						pair[i].comp_addr, pair[i].comp_size);
@@ -91,6 +102,8 @@ void *starts_async_compression(void *arg)
 					pair[i].comp_size = comp_size;
 					pair[i].ready = 1;
 					pair[i].thread = 1;
+
+					last_comp_index = i;
 				}
 
 				pair[i].ncomp++;

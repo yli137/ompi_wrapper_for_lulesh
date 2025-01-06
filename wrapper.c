@@ -68,8 +68,8 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 		} else if(index != -1){
 			pthread_mutex_lock(&(pair[index].pair_lock));
-			if(rank == 0)
-				printf("i %d pair %d ncomp %d\n", index, pair_size, pair[index].ncomp);
+			//if(rank == 0)
+			//	printf("i %d pair %d lastcomp %d ncomp %d\n", index, pair_size, last_comp_index, pair[index].ncomp);
 			pair[index].ncomp = 0;
 			
 			if(pair[index].comp_size < type_size){
@@ -101,8 +101,8 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 							pair[index].thread, pair[index].faults);
 #endif
 
-					if(rank == 0)
-					printf("send i %d\n", index);
+					//if(rank == 0)
+					printf("rank %d send i %d pair_size %d\n", rank, index, pair_size);
 
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
@@ -204,7 +204,7 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 8, &cpuset);
+	CPU_SET(rank + 16, &cpuset);
 
 	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
 	if (result != 0) {
@@ -216,6 +216,7 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	arg1->tn = 0;
 	arg1->total = 2;
 	arg1->rank = rank;
+	
 	comp_thread_args *arg2 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
 	arg2->tn = 1;
 	arg2->total = 2;

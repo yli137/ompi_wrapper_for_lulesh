@@ -11,6 +11,8 @@
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
 
+extern int last_comp_index;
+
 
 // compression thread structure
 typedef struct comp_thread_args {

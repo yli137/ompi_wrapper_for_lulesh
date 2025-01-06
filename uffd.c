@@ -58,14 +58,22 @@ void *handler(void *arg)
 				struct uffdio_writeprotect uffdio_wp;
 				for(int i = 0; i < pair_size; i++){
 					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
-							fault_address <= (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
+							fault_address < (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
 						pthread_mutex_lock(&(pair[i].pair_lock));
 						pair[i].ready = 0;
 						pair[i].faults++;
 						pair[i].last_fault = last_fault;
 
 						pthread_mutex_lock(&cache_lock);
-						put(cache, (unsigned long)(pair[i].isend_addr), (size_t)(pair[i].isend_size));
+						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
+						
+#if 0
+						if(fargs->rank == 0){
+							printf("put\n");
+							print_cache(cache);
+							printf("\n");
+						}
+#endif
 						pthread_mutex_unlock(&cache_lock);
 
 						pthread_mutex_unlock(&(pair[i].pair_lock));

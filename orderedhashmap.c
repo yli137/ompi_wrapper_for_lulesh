@@ -168,7 +168,6 @@ Node remove_least_used(LRUCache *cache) {
 
 void print_cache(LRUCache *cache) {
     Node *current = cache->head;
-    printf("Cache contents (most to least recent):\n");
     while (current) {
         printf("Key: %lu, Value: %zu\n", current->key, current->value);
         current = current->next;
