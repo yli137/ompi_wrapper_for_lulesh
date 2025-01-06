@@ -49,8 +49,6 @@ void try_decompress( char *input_buffer, int input_size )
 
 void *starts_async_compression(void *arg)
 {
-	comp_thread_args cargs = *((comp_thread_args*)arg);
-
 	struct uffdio_writeprotect uffdio_wp;
 	int did_comp = 0;
 	while(1){
@@ -76,8 +74,7 @@ void *starts_async_compression(void *arg)
 			}
 		}
 
-		//for(int i = 0; i < pair_size; i++){
-		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn + 1) && i < pair_size; i++){
+		for(int i = 0; i < pair_size; i++){
 			// try do lock differently
 			if( pthread_mutex_trylock(&(pair[i].pair_lock)) == 0 ){
 				//if(cargs.rank == 0)
@@ -92,6 +89,7 @@ void *starts_async_compression(void *arg)
 						pair[i].ready = 1;
 						pair[i].thread = 1;
 					}
+					pair[i].ncomp++;
 				}
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}

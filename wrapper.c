@@ -65,6 +65,10 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 		} else if(index != -1){
 			pthread_mutex_lock(&(pair[index].pair_lock));
+
+			if(rank == 0)
+				printf("i %d pair %d ncomp %d\n", index, pair_size, pair[index].ncomp);
+			pair[index].ncomp = 0;
 			
 			if(pair[index].comp_size < type_size){
 				//printf("%d send index %d ready %d comp_size %d type_size %d pair_size %d\n",
@@ -81,6 +85,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				if(pair[index].ready == 1 && pair[index].comp_size != 0){
 					pair[index].send_time = MPI_Wtime();
 
+#if 0
 					printf("%d send index %d comp_size %d type_size %d pair_size %d comp_time %.3f send_time %.3f last_fault %.9f difference %.9f gap %.9f thread %d faults %d\n",
 							rank, index, pair[index].comp_size, type_size, pair_size,
 							pair[index].comp_time, pair[index].send_time, 
@@ -88,6 +93,8 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 							pair[index].send_time - pair[index].comp_time,
 							pair[index].send_time - pair[index].last_fault,
 							pair[index].thread, pair[index].faults);
+#endif
+
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 					pair[index].faults = 0;
@@ -183,35 +190,26 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 8, &cpuset);
+	CPU_SET(rank + 16, &cpuset);
 
 	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
 	if (result != 0) {
 		perror("Error setting thread affinity");
 	}
 	
-	pthread_t compression_thread1, compression_thread2;
+	pthread_t compression_thread1;
 	comp_thread_args *arg1 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
 	arg1->tn = 0;
-	arg1->total = 2;
+	arg1->total = 1;
 	arg1->rank = rank;
-	comp_thread_args *arg2 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
-	arg2->tn = 1;
-	arg2->total = 2;
-	arg2->rank = rank;
 
 	assert(pthread_create(&compression_thread1, NULL, starts_async_compression, (void*)arg1) == 0);
-	assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
 	
-	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
+	cpu_set_t cpuset_compression1;
 	CPU_ZERO(&cpuset_compression1);
 	CPU_SET(rank + 8, &cpuset_compression1);
 	
-	CPU_ZERO(&cpuset_compression2);
-	CPU_SET(rank + 24, &cpuset_compression2);
-	
 	assert(pthread_setaffinity_np(compression_thread1, sizeof(cpu_set_t), &cpuset_compression1) == 0);
-	assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
 
 	return ret;
 }

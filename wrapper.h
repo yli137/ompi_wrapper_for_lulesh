@@ -36,6 +36,8 @@ typedef struct addr_pair {
 	int comp_size;
 	int ready;
 
+	int ncomp;
+
 	double comp_time;
 	double send_time;
 	double last_fault;

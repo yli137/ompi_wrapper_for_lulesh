@@ -31,6 +31,8 @@ int find_and_create( char *addr, int size )
 		pair[0].comp_addr = (char*)malloc(size + 100);
 		pair[0].comp_size = size + 100;
 		pair[0].ready = 0;
+
+		pair[0].ncomp = 0;
 	
 		pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
 		pair[0].aligned_size = (size + 4095) / 4096 * 4096;
@@ -50,6 +52,8 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].comp_addr = (char*)malloc(size+100);
 		pair[pair_size].comp_size = size + 100;
 		pair[pair_size].ready = 0;
+		
+		pair[pair_size].ncomp = 0;
 
 		pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
 		pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
