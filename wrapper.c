@@ -40,27 +40,20 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	//if(rank == 0)
-	//	printf("size %d\n", type_size);
+	int index = find_and_create((char*)buf, type_size);
 
-	int size1 = 240000;
+	if(index == -1)
+		index = find_and_create((char*)buf, type_size);
 
-	//if(type_size >= size1){
-		int index = find_and_create((char*)buf, type_size);
-
-		if(index == -1)
-			index = find_and_create((char*)buf, type_size);
-
-		pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
-				pair[index].isend_size,
-				pair[index].comp_addr,
-				pair[index].comp_size);
-		if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
-			//printf("rank %d send %d type_size %d\n", rank, pair[index].comp_size, type_size);
-			return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-					dest, tag, comm, request);
-		}
-	//}
+	pair[index].comp_size = compress_lz4_buffer(pair[index].isend_addr, 
+			pair[index].isend_size,
+			pair[index].comp_addr,
+			pair[index].comp_size);
+	if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
+		//printf("rank %d send %d type_size %d\n", rank, pair[index].comp_size, type_size);
+		return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+				dest, tag, comm, request);
+	}
 
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
