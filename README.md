@@ -105,3 +105,9 @@ uffd's WP is keeping lulesh from moving forward, while too many write faults are
 Going to new branch to add a "wall clock" for each pair. When a pair is detected as dirty, wait for certain iteration. Then set WP on and do compression. 
 
 Added all measurements, gap, last fault time, isend time, etc..
+
+**1/5/2025**
+
+Added orderedhashmap for compression. compression thread takes the least updated pair to do compression.
+
+number of compression per pair and per iteration is added.

@@ -63,6 +63,11 @@ void *handler(void *arg)
 						pair[i].ready = 0;
 						pair[i].faults++;
 						pair[i].last_fault = last_fault;
+
+						pthread_mutex_lock(&cache_lock);
+						put(cache, (unsigned long)(pair[i].isend_addr), (size_t)(pair[i].isend_size));
+						pthread_mutex_unlock(&cache_lock);
+
 						pthread_mutex_unlock(&(pair[i].pair_lock));
 					}
 				}

@@ -6,11 +6,10 @@
 #include <time.h>
 #include <openssl/sha.h>
 
-#include "hashset.h"
-#include "hashset_itr.h"
+#include "orderedhashmap.h"
 
-
-extern hashset_t seen_addr;
+extern LRUCache *cache;
+extern pthread_mutex_t cache_lock;
 
 
 // compression thread structure
@@ -38,6 +37,9 @@ typedef struct addr_pair {
 	char *isend_addr;
 	int isend_size;
 	char *comp_addr;
+
+	int ncomp;
+
 	int comp_size;
 	int ready;
 

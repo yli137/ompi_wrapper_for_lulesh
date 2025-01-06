@@ -23,14 +23,14 @@
 #include <errno.h>
 
 int compress_lz4_buffer( const char *input_buffer, int input_size,
-		         char *output_buffer, int output_size )
+		char *output_buffer, int output_size )
 {
 	return LZ4_compress_default( input_buffer, output_buffer, input_size, output_size );
 }
 
 
 int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
-		                   char *output_buffer, int output_size )
+		char *output_buffer, int output_size )
 {
 	return LZ4_decompress_safe( input_buffer, output_buffer, input_size, output_size );
 }
@@ -49,10 +49,10 @@ void try_decompress( char *input_buffer, int input_size )
 
 void *starts_async_compression(void *arg)
 {
+	Node *node;
 	comp_thread_args cargs = *((comp_thread_args*)arg);
 
 	struct uffdio_writeprotect uffdio_wp;
-	int did_comp = 0;
 	while(1){
 		usleep(1);
 
@@ -76,23 +76,24 @@ void *starts_async_compression(void *arg)
 			}
 		}
 
-		//for(int i = 0; i < pair_size; i++){
-		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn + 1) && i < pair_size; i++){
-			// try do lock differently
-			if( pthread_mutex_trylock(&(pair[i].pair_lock)) == 0 ){
-				//if(cargs.rank == 0)
-				//	printf("doing compression %d pair_size %d\n", i, pair_size);
-				if(pair[i].ready == 0){
-					pair[i].comp_time = MPI_Wtime();
-					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-							pair[i].comp_addr, pair[i].comp_size);
-					
-					if(comp_size < pair[i].isend_size && comp_size != 0){
-						pair[i].comp_size = comp_size;
-						pair[i].ready = 1;
-						pair[i].thread = 1;
-					}
+		pthread_mutex_lock(&cache_lock);
+		if(cache->size > 0)
+			node = remove_lru(cache);
+		pthread_mutex_unlock(&cache_lock);
+
+		for(int i = 0; i < pair_size; i++){
+			if(node->key == (unsigned long)(pair[i].isend_addr) && node->value == (size_t)(pair[i].isend_size)){
+				pthread_mutex_lock(&(pair[i].pair_lock));
+				int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+						pair[i].comp_addr, pair[i].comp_size);
+
+				if(comp_size < pair[i].isend_size && comp_size != 0){
+					pair[i].comp_size = comp_size;
+					pair[i].ready = 1;
+					pair[i].thread = 1;
 				}
+
+				pair[i].ncomp++;
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}

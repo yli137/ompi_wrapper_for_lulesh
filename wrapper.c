@@ -1,4 +1,5 @@
 #include "wrapper.h"
+#include "orderedhashmap.h"
 
 #include <mpi.h>
 #include <stdio.h>
@@ -22,11 +23,10 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#include "hashset.h"
-#include "hashset_itr.h"
 
 
-hashset_t seen_addr;
+LRUCache *cache;
+pthread_mutex_t cache_lock;
 
 
 recv_manager_t* manager = NULL;
@@ -45,9 +45,6 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	int type_size;
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
-
-	//if(rank == 0)
-	//	printf("size %d\n", type_size);
 
 	int size1 = 240000;
 	int index = -1;
@@ -71,10 +68,15 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 		} else if(index != -1){
 			pthread_mutex_lock(&(pair[index].pair_lock));
+			if(rank == 0)
+				printf("i %d pair %d ncomp %d\n", index, pair_size, pair[index].ncomp);
+			pair[index].ncomp = 0;
 			
 			if(pair[index].comp_size < type_size){
 				//printf("%d send index %d ready %d comp_size %d type_size %d pair_size %d\n",
 				//		rank, index, pair[index].ready, pair[index].comp_size, type_size, pair_size);
+				
+#if 0
 				pair[index].comp_time = MPI_Wtime();
 				int comp_size = compress_lz4_buffer(pair[index].isend_addr, pair[index].isend_size,
 						pair[index].comp_addr, pair[index].comp_size);
@@ -84,9 +86,12 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 					pair[index].ready = 1;
 					pair[index].thread = 0;
 				}
+#endif
 				if(pair[index].ready == 1 && pair[index].comp_size != 0){
-					pair[index].send_time = MPI_Wtime();
+					//printf("%d send index %d comp_size %d type_size %d\n",
+					//		rank, index, pair[index].comp_size, type_size);
 
+#if 0
 					printf("%d send index %d comp_size %d type_size %d pair_size %d comp_time %.3f send_time %.3f last_fault %.9f difference %.9f gap %.9f thread %d faults %d\n",
 							rank, index, pair[index].comp_size, type_size, pair_size,
 							pair[index].comp_time, pair[index].send_time, 
@@ -94,6 +99,11 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 							pair[index].send_time - pair[index].comp_time,
 							pair[index].send_time - pair[index].last_fault,
 							pair[index].thread, pair[index].faults);
+#endif
+
+					if(rank == 0)
+					printf("send i %d\n", index);
+
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 					pair[index].faults = 0;
@@ -170,8 +180,10 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
 	
-	// init registration list, hashset for seen address 
-	seen_addr = hashset_create();
+	// init LRU cache and register list and pair list
+	pthread_mutex_lock(&cache_lock);
+	cache = create_cache(100);
+	pthread_mutex_unlock(&cache_lock);
 	reg_list = init_register_list();
 	init_fault_list();
 
