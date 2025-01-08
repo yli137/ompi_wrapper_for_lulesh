@@ -97,6 +97,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				pthread_mutex_unlock(&(pair[index].pair_lock));
 				return comp_ret;
 			}
+
 			else if(pair[index].ready != 1){
 				pair[index].ready == 1;
 				int comp_size = compress_lz4_buffer(pair[index].isend_addr, pair[index].isend_size,
@@ -114,6 +115,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 					return comp_ret;
 				}
 			}
+
 			pthread_mutex_unlock(&(pair[index].pair_lock));
 		}
 	}

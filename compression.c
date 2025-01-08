@@ -91,24 +91,25 @@ void *starts_async_compression(void *arg)
 		}
 		pthread_mutex_unlock(&cache_lock);
 
-		for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn + 1) && i < pair_size; i++){
-		//for(int i = 0; i < pair_size; i++){
+		//for(int i = pair_size / cargs.total * cargs.tn; i < pair_size / cargs.total * (cargs.tn + 1) && i < pair_size; i++){
+		for(int i = 0; i < pair_size; i++){
 			if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
-				pthread_mutex_lock(&(pair[i].pair_lock));
-				int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-						pair[i].comp_addr, pair[i].comp_size);
+				if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
+					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+							pair[i].comp_addr, pair[i].comp_size);
 
-				if(comp_size < pair[i].isend_size && comp_size != 0){
-					pair[i].comp_size = comp_size;
-					pair[i].ready = 1;
-					pair[i].thread = 1;
+					if(comp_size < pair[i].isend_size && comp_size != 0){
+						pair[i].comp_size = comp_size;
+						pair[i].ready = 1;
+						pair[i].thread = 1;
 
-					last_comp_index = i;
+						last_comp_index = i;
+					}
+
+					pair[i].ncomp++;
+					pthread_mutex_unlock(&(pair[i].pair_lock));
 				}
-
-				pair[i].ncomp++;
-				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}
+		}
 	}
-}
