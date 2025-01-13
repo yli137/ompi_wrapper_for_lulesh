@@ -67,23 +67,15 @@ void *handler(void *arg)
 						pthread_mutex_lock(&cache_lock);
 						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
 						
-#if 0
-						if(fargs->rank == 0){
-							printf("put\n");
-							print_cache(cache);
-							printf("\n");
-						}
-#endif
 						pthread_mutex_unlock(&cache_lock);
 
 						pthread_mutex_unlock(&(pair[i].pair_lock));
 					}
 				}
 
+				
 				for(int i = 0; i < reg_list->pos; i++){
 					if( pthread_mutex_lock(&(reg_list->list[i].reg_lock)) == 0 ){
-						//if(fargs->rank == 0)
-						//	printf("Mark dirty %d pos %d\n", i, reg_list->pos);
 						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
 						uffdio_wp.range.len = reg_list->list[i].size;
 						uffdio_wp.mode = 0;
