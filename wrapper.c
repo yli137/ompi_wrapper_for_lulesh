@@ -46,8 +46,11 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int size1 = 240000;
+	int size1 = 960000; //240000;
 	int index = -1;
+
+	//if(rank == 0)
+	//	printf("type_size %d\n", type_size);
 
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);
@@ -76,7 +79,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 				if(comp_size < type_size && comp_size != 0){
 					pair[index].comp_size = comp_size;
-					pair[index].ready = 1;
+					//pair[index].ready = 1;
 					pair[index].thread = 0;
 					
 					//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
@@ -180,7 +183,7 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 8, &cpuset);
+	CPU_SET(rank + 16, &cpuset);
 
 	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
 	if (result != 0) {
@@ -199,17 +202,17 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	arg2->rank = rank;
 
 	assert(pthread_create(&compression_thread1, NULL, starts_async_compression, (void*)arg1) == 0);
-	assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
+	//assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
 
 	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
 	CPU_ZERO(&cpuset_compression1);
 	CPU_SET(rank + 8, &cpuset_compression1);
 
-	CPU_ZERO(&cpuset_compression2);
-	CPU_SET(rank + 24, &cpuset_compression2);
+	//CPU_ZERO(&cpuset_compression2);
+	//CPU_SET(rank + 24, &cpuset_compression2);
 
 	assert(pthread_setaffinity_np(compression_thread1, sizeof(cpu_set_t), &cpuset_compression1) == 0);
-	assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
+	//assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
 
 	return ret;
 }
