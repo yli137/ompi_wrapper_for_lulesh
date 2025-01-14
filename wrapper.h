@@ -48,7 +48,7 @@ typedef struct addr_pair {
 
 	int comp_size;
 	int ready;
-	MPI_Request **request;
+	MPI_Request *request;
 
 	double comp_time;
 	double send_time;

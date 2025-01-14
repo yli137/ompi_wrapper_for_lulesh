@@ -45,7 +45,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int size1 = 2160000; //960000; //240000; //960000; //240000;
+	int size1 = 2000;//240000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
 	//if(rank == 0)
@@ -63,13 +63,12 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pair[index].ncomp = 0;
 
 			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-				printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
 				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
 
 				pair[index].sending = 1;
 				pair[index].faults = 0;
-				pair[index].request = &request;
+				pair[index].request = request;
 				
 				
 				pthread_mutex_unlock(&(pair[index].pair_lock));
@@ -124,6 +123,17 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 	int tag = status->MPI_TAG;
 	int count;
 	MPI_Get_count(status, MPI_BYTE, &count);
+	
+	for(int i = 0; i < pair_size; i++){
+		if(pair[i].request != NULL){
+			if(pair[i].request == request){
+				pthread_mutex_lock(&(pair[i].pair_lock));
+				pair[i].sending = 0;
+				pair[i].request = NULL;
+				pthread_mutex_unlock(&(pair[i].pair_lock));
+			}
+		}
+	}
 
 	for(int i = 0; i < manager->size; i++){
 		if(manager->recv_addrs[i] == NULL)
@@ -152,14 +162,24 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	for(int i = 0; i < pair_size; i++){
-		//pthread_mutex_unlock(&(pair[i].pair_lock));
-		//pair[i].sending = 0;
+	int ret = MPI_Waitall(count, array_of_requests, array_of_statuses);
+
+	for(int j = 0; j < count; j++){
+		for(int i = 0; i < pair_size; i++){
+			if(pair[i].request != NULL){
+				//printf("request %p array of requests %p\n", pair[i].request, &(array_of_requests[j]));
+				if(pair[i].request == &(array_of_requests[j])){
+					pthread_mutex_lock(&(pair[i].pair_lock));
+					pair[i].sending = 0;
+					pair[i].request = NULL;
+					//printf("send done %d pair_size %d\n", i, pair_size);
+					pthread_mutex_unlock(&(pair[i].pair_lock));
+				}
+			}
+		}
 	}
 
-	return MPI_Waitall(count, array_of_requests, array_of_statuses);
+	return ret;
 }
 
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )

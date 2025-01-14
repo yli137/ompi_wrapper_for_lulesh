@@ -111,3 +111,11 @@ Added all measurements, gap, last fault time, isend time, etc..
 Added orderedhashmap for compression. compression thread takes the least updated pair to do compression.
 
 number of compression per pair and per iteration is added.
+
+**1/14/2025**
+
+sending bit is introduced to avoid modifying compressed buffer
+
+storing isend request in pair structure and clear sending bit when request finished.
+
+
