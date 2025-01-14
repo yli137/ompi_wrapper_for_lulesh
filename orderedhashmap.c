@@ -151,8 +151,10 @@ void put(LRUCache *cache, unsigned long key, size_t value) {
 }
 
 // Check if a key is present in the cache
-bool check(LRUCache *cache, unsigned long key) {
-	return find_in_hashmap(cache, key) != NULL;
+int check(LRUCache *cache, unsigned long key) {
+	if(find_in_hashmap(cache,key) != NULL)
+		return 1;
+	return 0;
 }
 
 // Remove the least recently used pair and return it

@@ -33,6 +33,8 @@ int find_and_create( char *addr, int size )
 		pair[0].ready = 0;
 
 		pair[0].ncomp = 0;
+		pair[0].sending = 0;
+		pair[0].request = NULL;
 	
 		pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
 		pair[0].aligned_size = (size + 4095) / 4096 * 4096;
@@ -54,6 +56,8 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].ready = 0;
 		
 		pair[pair_size].ncomp = 0;
+		pair[pair_size].sending = 0;
+		pair[pair_size].request = NULL;
 
 		pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
 		pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
@@ -142,7 +146,7 @@ reg_addr_list *realloc_register_list()
 	return reg_list;
 }
 
-bool add_reg_pair(char *region, int size)
+int add_reg_pair(char *region, int size)
 {
 
 	//pthread_mutex_lock(&reg_lock);
@@ -152,7 +156,7 @@ bool add_reg_pair(char *region, int size)
 		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&
 				(unsigned long)region < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
 			if(reg_list->list[i].size >= size)
-				return false;
+				return 0;
 			region = (char*)((unsigned long)(reg_list->list[i].region + reg_list->list[i].size));
 			size = size - ((unsigned long)region - (unsigned long)(reg_list->list[i].region));
 		}
@@ -170,7 +174,7 @@ bool add_reg_pair(char *region, int size)
 	//reg_list->pos++;
 
 	//pthread_mutex_unlock(&reg_lock);
-	return true;
+	return 1;
 }
 
 void init_fault_list()

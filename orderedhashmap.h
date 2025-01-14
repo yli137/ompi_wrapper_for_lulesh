@@ -55,7 +55,7 @@ Node *remove_lru(LRUCache *cache);
 void put(LRUCache *cache, unsigned long key, size_t value);
 
 // Check if a key is present in the cache
-bool check(LRUCache *cache, unsigned long key);
+int check(LRUCache *cache, unsigned long key);
 
 // Remove the least recently used pair and return it
 Node remove_least_used(LRUCache *cache);

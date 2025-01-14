@@ -28,7 +28,6 @@
 LRUCache *cache;
 pthread_mutex_t cache_lock;
 
-
 recv_manager_t* manager = NULL;
 int recv_count = 0;
 int wait_count = 0;
@@ -46,7 +45,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int size1 = 960000; //240000;
+	int size1 = 2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
 	//if(rank == 0)
@@ -63,33 +62,40 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pthread_mutex_lock(&(pair[index].pair_lock));
 			pair[index].ncomp = 0;
 
-			if(pair[index].ready == 1 && pair[index].comp_size != 0 && pair[index].comp_size < type_size){
-				//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
+			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
+				printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
 				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
+
+				pair[index].sending = 1;
 				pair[index].faults = 0;
+				pair[index].request = &request;
+				
+				
 				pthread_mutex_unlock(&(pair[index].pair_lock));
 				return comp_ret;
 			}
 
+#if 0
 			else if(pair[index].ready != 1){
 				pair[index].ready == 1;
 				int comp_size = compress_lz4_buffer(pair[index].isend_addr, pair[index].isend_size,
 						pair[index].comp_addr, pair[index].isend_size + 100);
 
 				if(comp_size < type_size && comp_size != 0){
-					pair[index].comp_size = comp_size;
-					//pair[index].ready = 1;
+					pair[index].comp_size = pair[index].isend_size + 100;
+					pair[index].ready = 0;
 					pair[index].thread = 0;
 					
 					//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
-					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+					int comp_ret = MPI_Isend(pair[index].comp_addr, comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 					pthread_mutex_unlock(&(pair[index].pair_lock));
 
 					return comp_ret;
 				}
 			}
+#endif
 
 			pthread_mutex_unlock(&(pair[index].pair_lock));
 		}
@@ -149,7 +155,8 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	for(int i = 0; i < pair_size; i++){
-		pthread_mutex_unlock(&(pair[i].pair_lock));
+		//pthread_mutex_unlock(&(pair[i].pair_lock));
+		//pair[i].sending = 0;
 	}
 
 	return MPI_Waitall(count, array_of_requests, array_of_statuses);

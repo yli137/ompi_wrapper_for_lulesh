@@ -13,6 +13,9 @@ extern pthread_mutex_t cache_lock;
 
 extern int last_comp_index;
 
+extern MPI_Request ***requests;
+extern pthread_mutex_t request_lock;
+
 
 // compression thread structure
 typedef struct comp_thread_args {
@@ -41,9 +44,11 @@ typedef struct addr_pair {
 	char *comp_addr;
 
 	int ncomp;
+	int sending;
 
 	int comp_size;
 	int ready;
+	MPI_Request **request;
 
 	double comp_time;
 	double send_time;
@@ -110,7 +115,7 @@ void add_fault_args(int uffd, size_t length, void *addr, int rank);
 
 reg_addr_list *init_register_list();
 reg_addr_list *realloc_register_list();
-bool add_reg_pair(char *region, int size);
+int add_reg_pair(char *region, int size);
 
 
 void uffd_register(char *addr, size_t size);
