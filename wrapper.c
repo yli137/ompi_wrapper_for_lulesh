@@ -45,7 +45,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int size1 = 2000;//240000; //2160000; //960000; //240000; //960000; //240000;
+	int size1 = 2000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
 	//if(rank == 0)
