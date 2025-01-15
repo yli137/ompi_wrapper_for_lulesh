@@ -118,4 +118,4 @@ sending bit is introduced to avoid modifying compressed buffer
 
 storing isend request in pair structure and clear sending bit when request finished.
 
-
+try swap sequence in compression thread. Lock + compression is holding up the isend calls.
