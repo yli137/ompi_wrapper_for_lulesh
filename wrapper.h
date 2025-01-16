@@ -125,6 +125,7 @@ extern recv_manager_t* manager;
 
 // MPI Wrapper
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided );
+int wrapper_MPI_Init( int *argc, char ***argv );
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		       int tag, MPI_Comm comm, MPI_Request *request );
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,

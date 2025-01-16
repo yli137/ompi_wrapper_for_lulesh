@@ -45,11 +45,11 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int size1 = 21600; //2160000; //960000; //240000; //960000; //240000;
+	int size1 = 5000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
-	if(rank == 0)
-		printf("type_size %d\n", type_size);
+	//if(rank == 0)
+	//	printf("type_size %d\n", type_size);
 
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);
@@ -181,6 +181,69 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 
 	return ret;
 }
+
+int wrapper_MPI_Init( int *argc, char ***argv )
+{
+	int ret = MPI_Init( argc, argv );
+
+	// init LRU cache and register list and pair list
+	pthread_mutex_lock(&cache_lock);
+	cache = create_cache(100);
+	pthread_mutex_unlock(&cache_lock);
+	reg_list = init_register_list();
+	init_fault_list();
+
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	fargs = (struct fault_handler_args*)malloc(sizeof(struct fault_handler_args));
+	fargs->uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+	fargs->rank = rank;
+
+	struct uffdio_api uffdio_api;
+	uffdio_api.api = UFFD_API;
+	uffdio_api.features = UFFD_FEATURE_PAGEFAULT_FLAG_WP;
+	assert(ioctl(fargs->uffd, UFFDIO_API, &uffdio_api) != -1);
+
+	pthread_t uffd_thread;
+	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
+
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(rank + 16, &cpuset);
+
+	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
+	if (result != 0) {
+		perror("Error setting thread affinity");
+	}
+
+	pthread_t compression_thread1, compression_thread2;
+	comp_thread_args *arg1 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
+	arg1->tn = 0;
+	arg1->total = 2;
+	arg1->rank = rank;
+
+	comp_thread_args *arg2 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
+	arg2->tn = 1;
+	arg2->total = 2;
+	arg2->rank = rank;
+
+	assert(pthread_create(&compression_thread1, NULL, starts_async_compression, (void*)arg1) == 0);
+	//assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
+
+	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
+	CPU_ZERO(&cpuset_compression1);
+	CPU_SET(rank + 8, &cpuset_compression1);
+
+	//CPU_ZERO(&cpuset_compression2);
+	//CPU_SET(rank + 24, &cpuset_compression2);
+
+	assert(pthread_setaffinity_np(compression_thread1, sizeof(cpu_set_t), &cpuset_compression1) == 0);
+	//assert(pthread_setaffinity_np(compression_thread2, sizeof(cpu_set_t), &cpuset_compression2) == 0);
+
+	return ret;
+}
+
 
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )
 {

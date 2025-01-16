@@ -100,9 +100,11 @@ void *starts_async_compression(void *arg)
 				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
 					if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
 						if(pair[i].sending == 0){
+							pthread_mutex_unlock(&(pair[i].pair_lock));
 							int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 									pair[i].comp_addr, pair[i].isend_size + 100);
 
+							pthread_mutex_lock(&(pair[i].pair_lock));
 							if(comp_size < pair[i].isend_size && comp_size != 0){
 								pair[i].comp_size = comp_size;
 								//pair[i].ready = 1;
