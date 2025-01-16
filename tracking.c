@@ -5,11 +5,11 @@
 #include <stdio.h>
 #include <mpi.h>
 
-Pair *pair;
+Pair *stored_pair;
 int pair_size = -1;
 
-pthread_mutex_t creation_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t reg_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t creation_lock;
+pthread_mutex_t reg_lock;
 fault_list flist;
 
 int find_and_create( char *addr, int size )
@@ -18,52 +18,52 @@ int find_and_create( char *addr, int size )
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
 
 	for( int i = 0; i < pair_size; i++ ){
-		if( pair[i].isend_addr == addr && pair[i].isend_size == size ){
+		if( stored_pair[i].isend_addr == addr && stored_pair[i].isend_size == size ){
 			return i;
 		}
 	}
 
 	if( pair_size == -1 ){
-		pair = (Pair*)malloc(sizeof(Pair));
+		stored_pair = (Pair*)malloc(sizeof(Pair));
 
-		pair[0].isend_addr = addr;
-		pair[0].isend_size = size;
-		pair[0].comp_addr = (char*)malloc(size + 100);
-		pair[0].comp_size = size + 100;
-		pair[0].ready = 0;
+		stored_pair[0].isend_addr = addr;
+		stored_pair[0].isend_size = size;
+		stored_pair[0].comp_addr = (char*)malloc(size + 100);
+		stored_pair[0].comp_size = size + 100;
+		stored_pair[0].ready = 0;
 
-		pair[0].ncomp = 0;
-		pair[0].sending = 0;
-		pair[0].request = NULL;
+		stored_pair[0].ncomp = 0;
+		stored_pair[0].sending = 0;
+		stored_pair[0].request = NULL;
 	
-		pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
-		pair[0].aligned_size = (size + 4095) / 4096 * 4096;
+		stored_pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
+		stored_pair[0].aligned_size = (size + 4095) / 4096 * 4096;
 
-		pair[0].comp_time = 0;
-		pair[0].faults = 0;
+		stored_pair[0].comp_time = 0;
+		stored_pair[0].faults = 0;
 
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
 		return -1;
 	} else {
 
-		pair = (Pair*)realloc(pair, sizeof(Pair) * (pair_size+1));
+		stored_pair = (Pair*)realloc(stored_pair, sizeof(Pair) * (pair_size+1));
 
-		pair[pair_size].isend_addr = addr;
-		pair[pair_size].isend_size = size;
-		pair[pair_size].comp_addr = (char*)malloc(size+100);
-		pair[pair_size].comp_size = size + 100;
-		pair[pair_size].ready = 0;
+		stored_pair[pair_size].isend_addr = addr;
+		stored_pair[pair_size].isend_size = size;
+		stored_pair[pair_size].comp_addr = (char*)malloc(size+100);
+		stored_pair[pair_size].comp_size = size + 100;
+		stored_pair[pair_size].ready = 0;
 		
-		pair[pair_size].ncomp = 0;
-		pair[pair_size].sending = 0;
-		pair[pair_size].request = NULL;
+		stored_pair[pair_size].ncomp = 0;
+		stored_pair[pair_size].sending = 0;
+		stored_pair[pair_size].request = NULL;
 
-		pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
-		pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
+		stored_pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
+		stored_pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
 		
-		pair[pair_size].comp_time = 0;
-		pair[pair_size].faults = 0;
+		stored_pair[pair_size].comp_time = 0;
+		stored_pair[pair_size].faults = 0;
 		
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );
@@ -169,7 +169,7 @@ int add_reg_pair(char *region, int size)
 	reg_list->list[reg_list->pos].dirty = 1;
 		
 	//pthread_mutex_unlock( &(reg_list->list[reg_list->pos].reg_lock) );
-	reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_init(&(reg_list->list[reg_list->pos].reg_lock), NULL);
 	
 	//reg_list->pos++;
 

@@ -59,49 +59,108 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			uffd_register((char*)buf, type_size);
 
 		} else if(index != -1){
-			pthread_mutex_lock(&(pair[index].pair_lock));
-			pair[index].ncomp = 0;
+			pthread_mutex_lock(&(stored_pair[index].pair_lock));
+			stored_pair[index].ncomp = 0;
 
-			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+			if(stored_pair[index].ready == 1 && stored_pair[index].comp_size < stored_pair[index].isend_size){
+				int comp_ret = MPI_Isend(stored_pair[index].comp_addr, stored_pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
 
-				pair[index].sending = 1;
-				pair[index].faults = 0;
-				pair[index].request = request;
+				stored_pair[index].sending = 1;
+				stored_pair[index].faults = 0;
+				stored_pair[index].request = request;
 				
 				
-				pthread_mutex_unlock(&(pair[index].pair_lock));
+				pthread_mutex_unlock(&(stored_pair[index].pair_lock));
 				return comp_ret;
 			}
 
 #if 0
-			else if(pair[index].ready != 1){
-				pair[index].ready == 1;
-				int comp_size = compress_lz4_buffer(pair[index].isend_addr, pair[index].isend_size,
-						pair[index].comp_addr, pair[index].isend_size + 100);
+			else if(stored_pair[index].ready != 1){
+				stored_pair[index].ready == 1;
+				int comp_size = compress_lz4_buffer(stored_pair[index].isend_addr, stored_pair[index].isend_size,
+						stored_pair[index].comp_addr, stored_pair[index].isend_size + 100);
 
 				if(comp_size < type_size && comp_size != 0){
-					pair[index].comp_size = pair[index].isend_size + 100;
-					pair[index].ready = 0;
-					pair[index].thread = 0;
+					stored_pair[index].comp_size = stored_pair[index].isend_size + 100;
+					stored_pair[index].ready = 0;
+					stored_pair[index].thread = 0;
 					
 					//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
-					int comp_ret = MPI_Isend(pair[index].comp_addr, comp_size, MPI_BYTE,
+					int comp_ret = MPI_Isend(stored_pair[index].comp_addr, comp_size, MPI_BYTE,
 							dest, tag, comm, request);
-					pthread_mutex_unlock(&(pair[index].pair_lock));
+					pthread_mutex_unlock(&(stored_pair[index].pair_lock));
 
 					return comp_ret;
 				}
 			}
 #endif
 
-			pthread_mutex_unlock(&(pair[index].pair_lock));
+			pthread_mutex_unlock(&(stored_pair[index].pair_lock));
 		}
 	}
 
 	//printf("%d %d %d\n", rank, type_size, type_size);
 	return MPI_Isend( buf, count, type, dest, tag, comm, request );
+}
+
+int wrapper_MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
+{
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	int type_size;
+	MPI_Type_size( datatype, &type_size );
+	type_size *= count;
+
+	int size1 = 2000; //2160000; //960000; //240000; //960000; //240000;
+	int index = -1;
+
+	if(rank == 0)
+		printf("addr %p type_size %d pair_size %d\n", buf, type_size, pair_size);
+
+	if(type_size >= size1){
+		index = find_and_create((char*)buf, type_size);
+
+		if(index == -1){
+			index = find_and_create((char*)buf, type_size);
+			uffd_register((char*)buf, type_size);
+
+		} else if(index != -1){
+			pthread_mutex_lock(&(stored_pair[index].pair_lock));
+			stored_pair[index].ncomp = 0;
+
+			if(stored_pair[index].ready == 1 && stored_pair[index].comp_size < stored_pair[index].isend_size){
+				printf("%d %d %d\n", rank, stored_pair[index].comp_size, type_size);
+				int comp_ret = MPI_Send(stored_pair[index].comp_addr, stored_pair[index].comp_size, MPI_BYTE,
+						dest, tag, comm);
+
+				stored_pair[index].sending = 0;
+				stored_pair[index].faults = 0;
+				
+				pthread_mutex_unlock(&(stored_pair[index].pair_lock));
+				return comp_ret;
+			}
+
+			pthread_mutex_unlock(&(stored_pair[index].pair_lock));
+		}
+	}
+
+	//printf("%d %d %d\n", rank, type_size, type_size);
+	return MPI_Send( buf, count, datatype, dest, tag, comm );
+}
+
+int wrapper_MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
+		MPI_Comm comm, MPI_Status *status)
+{
+	int ret = MPI_Recv(buf, count, datatype, source, tag, comm, status);
+	
+	int type_size;
+	MPI_Type_size( datatype, &type_size );
+	type_size *= count;
+	
+	try_decompress((char*)buf, type_size);
+	return ret;
 }
 
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
@@ -125,12 +184,12 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 	MPI_Get_count(status, MPI_BYTE, &count);
 	
 	for(int i = 0; i < pair_size; i++){
-		if(pair[i].request != NULL){
-			if(pair[i].request == request){
-				pthread_mutex_lock(&(pair[i].pair_lock));
-				pair[i].sending = 0;
-				pair[i].request = NULL;
-				pthread_mutex_unlock(&(pair[i].pair_lock));
+		if(stored_pair[i].request != NULL){
+			if(stored_pair[i].request == request){
+				pthread_mutex_lock(&(stored_pair[i].pair_lock));
+				stored_pair[i].sending = 0;
+				stored_pair[i].request = NULL;
+				pthread_mutex_unlock(&(stored_pair[i].pair_lock));
 			}
 		}
 	}
@@ -166,14 +225,14 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 
 	for(int j = 0; j < count; j++){
 		for(int i = 0; i < pair_size; i++){
-			if(pair[i].request != NULL){
+			if(stored_pair[i].request != NULL){
 				//printf("request %p array of requests %p\n", pair[i].request, &(array_of_requests[j]));
-				if(pair[i].request == &(array_of_requests[j])){
-					pthread_mutex_lock(&(pair[i].pair_lock));
-					pair[i].sending = 0;
-					pair[i].request = NULL;
+				if(stored_pair[i].request == &(array_of_requests[j])){
+					pthread_mutex_lock(&(stored_pair[i].pair_lock));
+					stored_pair[i].sending = 0;
+					stored_pair[i].request = NULL;
 					//printf("send done %d pair_size %d\n", i, pair_size);
-					pthread_mutex_unlock(&(pair[i].pair_lock));
+					pthread_mutex_unlock(&(stored_pair[i].pair_lock));
 				}
 			}
 		}
@@ -306,3 +365,4 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 
 	return ret;
 }
+

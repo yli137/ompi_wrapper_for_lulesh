@@ -88,7 +88,7 @@ extern struct fault_handler_args *fargs;
 extern reg_addr_list *reg_list;
 extern fault_list    flist;
 
-extern Pair *pair;
+extern Pair *stored_pair;
 extern int pair_size;
 extern pthread_mutex_t creation_lock;
 extern pthread_mutex_t reg_lock;
@@ -130,6 +130,9 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		       int tag, MPI_Comm comm, MPI_Request *request );
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
         	       int tag, MPI_Comm comm, MPI_Request *request );
+
+int wrapper_MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm);
+int wrapper_MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status);
 
 int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status);
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],

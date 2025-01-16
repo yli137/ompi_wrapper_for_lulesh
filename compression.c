@@ -66,13 +66,13 @@ void *starts_async_compression(void *arg)
 
 		if(node != NULL){
 			for(int i = 0; i < pair_size; i++){
-				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
-					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
+				if(node->key == (unsigned long)(stored_pair[i].isend_addr) % (size_t)(stored_pair[i].isend_size) && node->value == (size_t)(stored_pair[i].isend_size)){
+					if(pthread_mutex_lock(&(stored_pair[i].pair_lock)) == 0){
 						// setting pair to be compressed ready
-						pair[i].comp_size = pair[i].isend_size+100;
-						pair[i].ready = 1;
-						pair[i].thread = 1;
-						pthread_mutex_unlock(&(pair[i].pair_lock));
+						stored_pair[i].comp_size = stored_pair[i].isend_size+100;
+						stored_pair[i].ready = 1;
+						stored_pair[i].thread = 1;
+						pthread_mutex_unlock(&(stored_pair[i].pair_lock));
 					}
 				}
 			}
@@ -97,25 +97,25 @@ void *starts_async_compression(void *arg)
 			}
 
 			for(int i = 0; i < pair_size; i++){
-				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
-					if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
-						if(pair[i].sending == 0){
-							pthread_mutex_unlock(&(pair[i].pair_lock));
-							int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-									pair[i].comp_addr, pair[i].isend_size + 100);
+				if(node->key == (unsigned long)(stored_pair[i].isend_addr) % (size_t)(stored_pair[i].isend_size) && node->value == (size_t)(stored_pair[i].isend_size)){
+					if(pthread_mutex_trylock(&(stored_pair[i].pair_lock)) == 0){
+						if(stored_pair[i].sending == 0){
+							pthread_mutex_unlock(&(stored_pair[i].pair_lock));
+							int comp_size = compress_lz4_buffer(stored_pair[i].isend_addr, stored_pair[i].isend_size,
+									stored_pair[i].comp_addr, stored_pair[i].isend_size + 100);
 
-							pthread_mutex_lock(&(pair[i].pair_lock));
-							if(comp_size < pair[i].isend_size && comp_size != 0){
-								pair[i].comp_size = comp_size;
+							pthread_mutex_lock(&(stored_pair[i].pair_lock));
+							if(comp_size < stored_pair[i].isend_size && comp_size != 0){
+								stored_pair[i].comp_size = comp_size;
 								//pair[i].ready = 1;
-								pair[i].thread = 1;
+								stored_pair[i].thread = 1;
 
 								last_comp_index = i;
 							}
 						}
 
-						pair[i].ncomp++;
-						pthread_mutex_unlock(&(pair[i].pair_lock));
+						stored_pair[i].ncomp++;
+						pthread_mutex_unlock(&(stored_pair[i].pair_lock));
 					}
 				}
 			}
