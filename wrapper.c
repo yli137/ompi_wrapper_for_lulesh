@@ -7,7 +7,10 @@
 #include <unistd.h>
 
 #include <pthread.h>
+
+#define _GNU_SOURCE
 #include <sched.h>
+#include <hwloc.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
@@ -209,8 +212,10 @@ int wrapper_MPI_Init( int *argc, char ***argv )
 	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
 
 	cpu_set_t cpuset;
-	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 16, &cpuset);
+	//CPU_ZERO(&cpuset);
+	hwloc_bitmap_zero(&cpuset);
+	//CPU_SET(rank + 8, &cpuset);
+	hwloc_bitmap_set(rank + 8, &cpuset);
 
 	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
 	if (result != 0) {
@@ -232,8 +237,10 @@ int wrapper_MPI_Init( int *argc, char ***argv )
 	//assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
 
 	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
-	CPU_ZERO(&cpuset_compression1);
-	CPU_SET(rank + 8, &cpuset_compression1);
+	//CPU_ZERO(&cpuset_compression1);
+	hwloc_bitmap_zero(&cpuset_compression1);
+	//CPU_SET(rank + 8, &cpuset_compression1);
+	hwloc_bitmap_set(rank + 8, &cpuset_compression1);
 
 	//CPU_ZERO(&cpuset_compression2);
 	//CPU_SET(rank + 24, &cpuset_compression2);
@@ -272,8 +279,10 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
 
 	cpu_set_t cpuset;
-	CPU_ZERO(&cpuset);
-	CPU_SET(rank + 16, &cpuset);
+	//CPU_ZERO(&cpuset);
+	hwloc_bitmap_zero(&cpuset);
+	//CPU_SET(rank + 16, &cpuset);
+	hwloc_bitmap_set(rank + 8, &cpuset);
 
 	int result = pthread_setaffinity_np(uffd_thread, sizeof(cpu_set_t), &cpuset);
 	if (result != 0) {
@@ -295,8 +304,10 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	//assert(pthread_create(&compression_thread2, NULL, starts_async_compression, (void*)arg2) == 0);
 
 	cpu_set_t cpuset_compression1, cpuset_compression2, cpuset_compression3;
-	CPU_ZERO(&cpuset_compression1);
-	CPU_SET(rank + 8, &cpuset_compression1);
+	//CPU_ZERO(&cpuset_compression1);
+	hwloc_bitmap_zero(&cpuset_compression1);
+	//CPU_SET(rank + 8, &cpuset_compression1);
+	hwloc_bitmap_set(rank + 8, &cpuset_compression1);
 
 	//CPU_ZERO(&cpuset_compression2);
 	//CPU_SET(rank + 24, &cpuset_compression2);

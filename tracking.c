@@ -169,7 +169,8 @@ int add_reg_pair(char *region, int size)
 	reg_list->list[reg_list->pos].dirty = 1;
 		
 	//pthread_mutex_unlock( &(reg_list->list[reg_list->pos].reg_lock) );
-	reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;
+	//reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_init(&(reg_list->list[reg_list->pos].reg_lock), NULL);// = PTHREAD_MUTEX_INITIALIZER;
 	
 	//reg_list->pos++;
 
