@@ -8,6 +8,8 @@
 #include <mpi.h>
 #include <lz4.h>
 
+#include <sched.h>
+#include <hwloc.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <omp.h>
@@ -53,6 +55,19 @@ void *starts_async_compression(void *arg)
 {
 	Node *node;
 	comp_thread_args cargs = *((comp_thread_args*)arg);
+	
+	hwloc_topology_t topology;
+	hwloc_topology_init(&topology);
+	hwloc_topology_load(topology);
+
+	hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+	hwloc_bitmap_zero(cpuset);
+	hwloc_bitmap_set(cpuset, cargs.rank + 24);
+	if (hwloc_set_thread_cpubind(topology, pthread_self(), cpuset, HWLOC_CPUBIND_THREAD) != 0) {
+		perror("hwloc_set_thread_cpubind failed");
+		exit(EXIT_FAILURE);
+	}
+	
 
 	struct uffdio_writeprotect uffdio_wp;
 	while(1){

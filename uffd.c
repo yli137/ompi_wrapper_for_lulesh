@@ -15,6 +15,9 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 
+#include <sched.h>
+#include <hwloc.h>
+
 #include "wrapper.h"
 
 void *handler(void *arg)
@@ -22,6 +25,19 @@ void *handler(void *arg)
 	struct fault_handler_args* fargs = (struct fault_handler_args*) arg;
 	struct uffd_msg msg;
 	ssize_t nread;
+	
+	hwloc_topology_t topology;
+	hwloc_topology_init(&topology);
+	hwloc_topology_load(topology);
+
+	hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+	hwloc_bitmap_zero(cpuset);
+	hwloc_bitmap_set(cpuset, fargs->rank + 8);
+	if (hwloc_set_thread_cpubind(topology, pthread_self(), cpuset, HWLOC_CPUBIND_THREAD) != 0) {
+		perror("hwloc_set_thread_cpubind failed");
+		exit(EXIT_FAILURE);
+	}
+	
 
 	struct pollfd pollfd;
 	pollfd.fd = fargs->uffd;
