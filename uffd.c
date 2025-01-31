@@ -52,6 +52,8 @@ void *handler(void *arg)
 
 		// Handle the write fault
 		if (msg.event == UFFD_EVENT_PAGEFAULT) {
+			if(fargs->rank == PRINT_RANK)
+				printf("rank %d caught fault %d\n", fargs->rank, msg.arg.pagefault.flags);
 			if (msg.arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP) {
 				unsigned long fault_address = msg.arg.pagefault.address;
 
@@ -71,39 +73,80 @@ void *handler(void *arg)
 				unsigned long fault_address = msg.arg.pagefault.address;
 				double last_fault = MPI_Wtime();
 
+				if(fargs->rank == PRINT_RANK){
+					printf("fault_address %p\n", (char*)fault_address);
+					for(int i = 0; i < reg_list->pos; i++){
+						printf("reg-list %d pos %d region %p end %p\n",
+								i, reg_list->pos, reg_list->list[i].region, (char*)((unsigned long)(reg_list->list[i].region) + reg_list->list[i].size));
+					}
+					for(int i = 0; i < pair_size; i++){
+						printf("pair-list %d pos %d aligned_addr %p end %p\n",
+								i, pair_size,
+								pair[i].aligned_addr,
+								(char*)((unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size) );
+					}
+					printf("\n\n");
+				}
+
 				struct uffdio_writeprotect uffdio_wp;
 				for(int i = 0; i < pair_size; i++){
 					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
 							fault_address < (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
+						if(fargs->rank == PRINT_RANK)
+							printf("Trying to obtain lock %d pair_size %d\n", i, pair_size);
+						
 						pthread_mutex_lock(&(pair[i].pair_lock));
+
+						if(fargs->rank == PRINT_RANK)
+							printf("obtained lock %d pair_size %d\n", i, pair_size);
+
 						pair[i].ready = 0;
 						pair[i].faults++;
 						pair[i].last_fault = last_fault;
 
+						if(fargs->rank == PRINT_RANK)
+							printf("rank %d found the pair\n", fargs->rank);
+			
+						// clear WP off the region, increment "atomic" for how many overlapping buffers
+						for(int i = 0; i < reg_list->pos; i++){
+							if( pthread_mutex_lock(&(reg_list->list[i].reg_lock)) == 0 ){
+
+								if(reg_list->list[i].dirty == 0){
+									if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
+											fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+										if(fargs->rank == PRINT_RANK)
+											printf("rank %d clearing %d\n", fargs->rank, msg.arg.pagefault.flags);
+										uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+										uffdio_wp.range.len = reg_list->list[i].size;
+										uffdio_wp.mode = 0;
+
+										if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+											perror("UFFDIO_WRITEPROTECT2");
+											exit(EXIT_FAILURE);
+										}
+										reg_list->list[i].dirty = 1;
+										reg_list->list[i].atomic++;
+
+									}
+								}
+
+								pthread_mutex_unlock(&(reg_list->list[i].reg_lock));
+							}
+						}
+
 						pthread_mutex_lock(&cache_lock);
 						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
-						
 						pthread_mutex_unlock(&cache_lock);
 
 						pthread_mutex_unlock(&(pair[i].pair_lock));
+						if(fargs->rank == PRINT_RANK)
+							printf("release lock %d pair_size %d\n", i, pair_size);
+
 					}
 				}
 
-				
-				for(int i = 0; i < reg_list->pos; i++){
-					if( pthread_mutex_lock(&(reg_list->list[i].reg_lock)) == 0 ){
-						uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
-						uffdio_wp.range.len = reg_list->list[i].size;
-						uffdio_wp.mode = 0;
-
-						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-							perror("UFFDIO_WRITEPROTECT2");
-							exit(EXIT_FAILURE);
-						}
-						reg_list->list[i].dirty = 1;
-						pthread_mutex_unlock(&(reg_list->list[i].reg_lock));
-					}
-				}
+				if(fargs->rank == PRINT_RANK)
+					printf("OUT\n\n");
 			}
 		}
 	}
@@ -113,9 +156,20 @@ void *handler(void *arg)
 
 
 void uffd_register(char *addr, size_t size){
+
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
 	int page_size = sysconf(_SC_PAGE_SIZE);
 	char *region = (char*)((unsigned long)addr & ~(page_size - 1));
 	size_t region_size = (size + page_size - 1) / page_size * page_size;
+
+
+	char *st = (char*)((unsigned long)addr & ~(page_size - 1));
+	char *ed = (char*)((((unsigned long)addr + size) & ~(page_size - 1)) + 4096 );
+
+	//printf("region_size %lu actual needed %lu\n", region_size, (unsigned long)ed - (unsigned long)st);
+	region_size = (unsigned long)ed - (unsigned long)st;
 
 	if(add_reg_pair(region, region_size)){
 		char *region = reg_list->list[reg_list->pos].region;
@@ -137,8 +191,8 @@ void uffd_register(char *addr, size_t size){
 		uffdio_wp.mode = 0;
 		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
-		//uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-		//assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
 		reg_list->pos++;
 	}

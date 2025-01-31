@@ -123,3 +123,9 @@ try swap sequence in compression thread. Lock + compression is holding up the is
 **1/21/2025**
 
 switch CPU ZERO to bitmap
+
+**1/30/2025**
+
+registration has some issue. I've fixed the issue for correctness on address calculation. A memory start and end point could be in different pages, these pages all need to be registered within one registration, this part is done.
+
+still, LULESH still halts. Need to investigate. 

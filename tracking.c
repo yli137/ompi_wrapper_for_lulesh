@@ -37,13 +37,21 @@ int find_and_create( char *addr, int size )
 		pair[0].request = NULL;
 	
 		pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
-		pair[0].aligned_size = (size + 4095) / 4096 * 4096;
+		
+		char *st = (char*)((unsigned long)addr & ~(4095));
+		char *ed = (char*)((((unsigned long)addr + size) & ~(4095)) + 4096 );
+		pair[0].aligned_size = (unsigned long)ed - (unsigned long)st;
 
 		pair[0].comp_time = 0;
 		pair[0].faults = 0;
 
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
+		
+		pthread_mutex_init(&(pair[0].pair_lock), NULL);
+		if(rank == PRINT_RANK)
+			printf("init lock %d size %d\n", 0, pair_size);
+		
 		return -1;
 	} else {
 
@@ -60,13 +68,20 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].request = NULL;
 
 		pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
-		pair[pair_size].aligned_size = (size + 4095) / 4096 * 4096;
+		char *st = (char*)((unsigned long)addr & ~(4095));
+		char *ed = (char*)((((unsigned long)addr + size) & ~(4095)) + 4096 );
+		pair[pair_size].aligned_size = (unsigned long)ed - (unsigned long)st;
 		
 		pair[pair_size].comp_time = 0;
 		pair[pair_size].faults = 0;
 		
+		pthread_mutex_init(&(pair[pair_size].pair_lock), NULL);
+		if(rank == PRINT_RANK)
+			printf("init lock %d size %d\n", pair_size, pair_size);
+		
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );
+		
 		return -1;
 	} 
 }
@@ -149,16 +164,29 @@ reg_addr_list *realloc_register_list()
 int add_reg_pair(char *region, int size)
 {
 
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
 	//pthread_mutex_lock(&reg_lock);
 
 	// This region starts with in a registered region
 	for(int i = 0; i < reg_list->pos; i++){
 		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&
-				(unsigned long)region < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-			if(reg_list->list[i].size >= size)
-				return 0;
+				(unsigned long)region + size < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+			if(rank == PRINT_RANK)
+				printf("failed %p size %d last region %p last endpoint %p size %lu\n",
+						region,
+						size,
+						reg_list->list[i].region,
+						(char*)((unsigned long)(reg_list->list[i].region) + reg_list->list[i].size),
+						reg_list->list[i].size);
+			return 0;
+
+		} else if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) && 
+				(unsigned long)region + size > (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+			
 			region = (char*)((unsigned long)(reg_list->list[i].region + reg_list->list[i].size));
-			size = size - ((unsigned long)region - (unsigned long)(reg_list->list[i].region));
+			size = (unsigned long)region + size - (unsigned long)(reg_list->list[i].region) - reg_list->list[i].size;
 		}
 	}
 
@@ -166,12 +194,19 @@ int add_reg_pair(char *region, int size)
 		reg_list = realloc_register_list();
 	reg_list->list[reg_list->pos].region = region;
 	reg_list->list[reg_list->pos].size = size;
-	reg_list->list[reg_list->pos].dirty = 1;
-		
+	reg_list->list[reg_list->pos].dirty = 0;
+	reg_list->list[reg_list->pos].atomic = 0;
+
+	if(rank == PRINT_RANK)
+		printf("register position %d region %p size %d\n",
+				reg_list->pos,
+				region, size);
+
+
 	//pthread_mutex_unlock( &(reg_list->list[reg_list->pos].reg_lock) );
 	//reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_init(&(reg_list->list[reg_list->pos].reg_lock), NULL);// = PTHREAD_MUTEX_INITIALIZER;
-	
+
 	//reg_list->pos++;
 
 	//pthread_mutex_unlock(&reg_lock);

@@ -8,6 +8,8 @@
 
 #include "orderedhashmap.h"
 
+#define PRINT_RANK 0
+
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
 
@@ -66,6 +68,8 @@ typedef struct addr_pair {
 typedef struct register_addr {
 	char *region;
 	int size;
+	int atomic;
+
 	int dirty;
 
 	pthread_mutex_t reg_lock;
