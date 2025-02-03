@@ -2,14 +2,23 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#include <cassert>
 #include <stdio.h>
 #include <mpi.h>
+
+
+#include <fcntl.h>             /* Definition of O_* constants */
+#include <sys/syscall.h>       /* Definition of SYS_* constants */
+#include <linux/userfaultfd.h> /* Definition of UFFD_* constants */
+#include <unistd.h>
+#include <sys/ioctl.h>
+
+
 
 Pair *pair;
 int pair_size = -1;
 
 pthread_mutex_t creation_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t reg_lock = PTHREAD_MUTEX_INITIALIZER;
 fault_list flist;
 
 int find_and_create( char *addr, int size )
@@ -49,8 +58,6 @@ int find_and_create( char *addr, int size )
 		pthread_mutex_unlock( &creation_lock );
 		
 		pthread_mutex_init(&(pair[0].pair_lock), NULL);
-		if(rank == PRINT_RANK)
-			printf("init lock %d size %d\n", 0, pair_size);
 		
 		return -1;
 	} else {
@@ -76,8 +83,6 @@ int find_and_create( char *addr, int size )
 		pair[pair_size].faults = 0;
 		
 		pthread_mutex_init(&(pair[pair_size].pair_lock), NULL);
-		if(rank == PRINT_RANK)
-			printf("init lock %d size %d\n", pair_size, pair_size);
 		
 		pair_size++;
 		pthread_mutex_unlock( &creation_lock );
@@ -167,26 +172,48 @@ int add_reg_pair(char *region, int size)
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-	//pthread_mutex_lock(&reg_lock);
-
 	// This region starts with in a registered region
 	for(int i = 0; i < reg_list->pos; i++){
 		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&
-				(unsigned long)region + size < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-			if(rank == PRINT_RANK)
-				printf("failed %p size %d last region %p last endpoint %p size %lu\n",
-						region,
-						size,
-						reg_list->list[i].region,
-						(char*)((unsigned long)(reg_list->list[i].region) + reg_list->list[i].size),
-						reg_list->list[i].size);
-			return 0;
+				(unsigned long)region + size <= (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
+			return -1;
 
 		} else if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) && 
 				(unsigned long)region + size > (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
 			
-			region = (char*)((unsigned long)(reg_list->list[i].region + reg_list->list[i].size));
-			size = (unsigned long)region + size - (unsigned long)(reg_list->list[i].region) - reg_list->list[i].size;
+			int uffd = fargs->uffd;
+			assert(uffd != -1);
+			
+			// clear WP
+			struct uffdio_writeprotect uffdio_wp;
+			uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+			uffdio_wp.range.len = reg_list->list[i].size;
+			uffdio_wp.mode = 0;
+			assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+
+			// unregister
+			struct uffdio_range range;
+			range.start = (unsigned long)(reg_list->list[i].region);  // Start of the old region
+			range.len = reg_list->list[i].size;                    // Length of the old region
+
+			if (ioctl(uffd, UFFDIO_UNREGISTER, &range) == -1) {
+				perror("UFFDIO_UNREGISTER failed");
+				exit(EXIT_FAILURE);
+			}
+
+			if(rank == PRINT_RANK)
+				printf("Unregister done %p size %d\n", reg_list->list[i].region, reg_list->list[i].size);
+
+			if(rank == PRINT_RANK)
+				printf("Merge was %p %d\n",
+						reg_list->list[i].region,
+						reg_list->list[i].size);
+			reg_list->list[i].size += (unsigned long)region + size - (unsigned long)(reg_list->list[i].region) - reg_list->list[i].size;
+			if(rank == PRINT_RANK)
+				printf("Merge %p %d\n",
+						reg_list->list[i].region,
+						reg_list->list[i].size);
+			return i;
 		}
 	}
 
@@ -194,8 +221,8 @@ int add_reg_pair(char *region, int size)
 		reg_list = realloc_register_list();
 	reg_list->list[reg_list->pos].region = region;
 	reg_list->list[reg_list->pos].size = size;
-	reg_list->list[reg_list->pos].dirty = 0;
-	reg_list->list[reg_list->pos].atomic = 0;
+	reg_list->list[reg_list->pos].dirty = 1;
+	reg_list->list[reg_list->pos].atomic = 1;
 
 	if(rank == PRINT_RANK)
 		printf("register position %d region %p size %d\n",
@@ -209,8 +236,7 @@ int add_reg_pair(char *region, int size)
 
 	//reg_list->pos++;
 
-	//pthread_mutex_unlock(&reg_lock);
-	return 1;
+	return reg_list->pos;
 }
 
 void init_fault_list()

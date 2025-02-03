@@ -8,7 +8,6 @@
 
 #include <pthread.h>
 
-#define _GNU_SOURCE
 #include <sched.h>
 #include <hwloc.h>
 #include <stdlib.h>
@@ -30,6 +29,7 @@
 
 LRUCache *cache;
 pthread_mutex_t cache_lock;
+pthread_mutex_t reg_lock;
 
 recv_manager_t* manager = NULL;
 int recv_count = 0;
@@ -41,8 +41,15 @@ struct fault_handler_args *fargs = NULL;
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
+	int *change = (int*)buf;
+	(*change)++;
+	(*change)--;
+
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	if(rank == PRINT_RANK)
+		printf("Starts isend\n");
 
 	int type_size;
 	MPI_Type_size( type, &type_size );
@@ -74,25 +81,18 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		} else if(index != -1){
 			pthread_mutex_lock(&(pair[index].pair_lock));
 
-			if(rank == PRINT_RANK)
-				printf("isend got lock %d\n", index);
-
 			pair[index].ncomp = 0;
 
 			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-				//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
+				
 				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
-
 				pair[index].sending = 1;
 				pair[index].faults = 0;
 				pair[index].request = request;
 				
 				
 				pthread_mutex_unlock(&(pair[index].pair_lock));
-				
-				if(rank == PRINT_RANK)
-					printf("isend release lock %d\n", index);
 				return comp_ret;
 			}
 
@@ -118,8 +118,6 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 #endif
 
 			pthread_mutex_unlock(&(pair[index].pair_lock));
-			if(rank == PRINT_RANK)
-				printf("isend release lock %d\n", index);
 		}
 	}
 
@@ -203,7 +201,6 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 	for(int j = 0; j < count; j++){
 		for(int i = 0; i < pair_size; i++){
 			if(pair[i].request != NULL){
-				//printf("request %p array of requests %p\n", pair[i].request, &(array_of_requests[j]));
 				if(pair[i].request == &(array_of_requests[j])){
 					pthread_mutex_lock(&(pair[i].pair_lock));
 					
@@ -235,13 +232,16 @@ int wrapper_MPI_Init( int *argc, char ***argv )
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
-
+	
 	// init LRU cache and register list and pair list
 	pthread_mutex_lock(&cache_lock);
 	cache = create_cache(100);
 	pthread_mutex_unlock(&cache_lock);
 	reg_list = init_register_list();
 	init_fault_list();
+	
+	// registration lock
+	pthread_mutex_init(&reg_lock, NULL);// = PTHREAD_MUTEX_INITIALIZER;
 
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -258,7 +258,7 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	pthread_t uffd_thread;
 	assert(pthread_create(&uffd_thread, NULL, handler, (void*)fargs) == 0);
 
-	pthread_t compression_thread1, compression_thread2;
+	pthread_t compression_thread1;//, compression_thread2;
 	comp_thread_args *arg1 = (comp_thread_args*)malloc(sizeof(comp_thread_args));
 	arg1->tn = 0;
 	arg1->total = 2;

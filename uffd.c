@@ -46,14 +46,19 @@ void *handler(void *arg)
 	int page_size = sysconf(_SC_PAGE_SIZE);
 
 	while(poll(&pollfd, 1, -1) > 0){
-		nread = read(fargs->uffd, &msg, sizeof(msg));
+
+		usleep(1);
+		nread = read(fargs->uffd, &msg, sizeof(struct uffd_msg));
 		if (nread == 0 || nread == -1) 
 			continue;
+
+		if(fargs->rank == PRINT_RANK)
+			printf("Caught SOMETHING\n\n");
 
 		// Handle the write fault
 		if (msg.event == UFFD_EVENT_PAGEFAULT) {
 			if(fargs->rank == PRINT_RANK)
-				printf("rank %d caught fault %d\n", fargs->rank, msg.arg.pagefault.flags);
+				printf("!!!!!!rank %d caught fault %llu\n", fargs->rank, msg.arg.pagefault.flags);
 			if (msg.arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP) {
 				unsigned long fault_address = msg.arg.pagefault.address;
 
@@ -92,9 +97,51 @@ void *handler(void *arg)
 				for(int i = 0; i < pair_size; i++){
 					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
 							fault_address < (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
+	
+						if(fargs->rank == PRINT_RANK)
+							printf("fault address within i %d pair_size %d\n", i, pair_size);
+
+						pthread_mutex_lock(&reg_lock);
+						// clear WP off the region, increment "atomic" for how many overlapping buffers
+						for(int j = 0; j < reg_list->pos; j++){
+							//if( pthread_mutex_lock(&(reg_list->list[i].reg_lock)) == 0 ){
+
+								unsigned long pair_st = (unsigned long)(pair[i].aligned_addr),
+									      pair_ed = (unsigned long)(pair[i].aligned_addr) + (size_t)(pair[i].aligned_size),
+									      reg_st = (unsigned long)(reg_list->list[j].region),
+									      reg_ed = (unsigned long)(reg_list->list[j].region) + (size_t)(reg_list->list[j].size);
+
+
+
+								// Missing all kinds of cases
+								if((pair_st >= reg_st && pair_st <= reg_ed ) || // start in the same region
+										(pair_ed >= reg_st && pair_ed <= reg_ed) || // end in the same region
+										(pair_st <= reg_st && pair_ed >= reg_ed) ){
+										
+									if(fargs->rank == PRINT_RANK)
+										printf("...rank %d clearing %d pos %d %llu\n", fargs->rank, j, reg_list->pos, msg.arg.pagefault.flags);
+									uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
+									uffdio_wp.range.len = reg_list->list[j].size;
+									uffdio_wp.mode = 0;
+
+									if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+										perror("UFFDIO_WRITEPROTECT1111");
+										exit(EXIT_FAILURE);
+									}
+									reg_list->list[j].dirty = 1;
+
+								}
+
+								//pthread_mutex_unlock(&(reg_list->list[j].reg_lock));
+							//}
+						}
+						pthread_mutex_unlock(&reg_lock);
+
+						// Done with changing registration
+
 						if(fargs->rank == PRINT_RANK)
 							printf("Trying to obtain lock %d pair_size %d\n", i, pair_size);
-						
+
 						pthread_mutex_lock(&(pair[i].pair_lock));
 
 						if(fargs->rank == PRINT_RANK)
@@ -105,36 +152,23 @@ void *handler(void *arg)
 						pair[i].last_fault = last_fault;
 
 						if(fargs->rank == PRINT_RANK)
-							printf("rank %d found the pair\n", fargs->rank);
-			
-						// clear WP off the region, increment "atomic" for how many overlapping buffers
-						for(int i = 0; i < reg_list->pos; i++){
-							if( pthread_mutex_lock(&(reg_list->list[i].reg_lock)) == 0 ){
-
-								if(reg_list->list[i].dirty == 0){
-									if(fault_address >= (unsigned long)(reg_list->list[i].region) && 
-											fault_address < (unsigned long)(reg_list->list[i].region) + reg_list->list[i].size){
-										if(fargs->rank == PRINT_RANK)
-											printf("rank %d clearing %d\n", fargs->rank, msg.arg.pagefault.flags);
-										uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
-										uffdio_wp.range.len = reg_list->list[i].size;
-										uffdio_wp.mode = 0;
-
-										if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-											perror("UFFDIO_WRITEPROTECT2");
-											exit(EXIT_FAILURE);
-										}
-										reg_list->list[i].dirty = 1;
-										reg_list->list[i].atomic++;
-
-									}
-								}
-
-								pthread_mutex_unlock(&(reg_list->list[i].reg_lock));
-							}
-						}
+							printf("---rank %d found the pair\n", fargs->rank);
 
 						pthread_mutex_lock(&cache_lock);
+
+						if(fargs->rank == PRINT_RANK){
+							printf("Appending to cache %ld addr %ld size %d\n", cache->size, 
+									(unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), 
+									pair[i].isend_size);
+
+							for(size_t p = 0; p < cache->size; p++){
+								Node *temp = cache->head;
+								printf("CACHE %ld size %ld addr %ld size %lu\n",
+										p, cache->size, temp->key, temp->value);
+								temp = temp->next;
+							}
+							printf("\n\n");
+						}
 						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
 						pthread_mutex_unlock(&cache_lock);
 
@@ -157,6 +191,8 @@ void *handler(void *arg)
 
 void uffd_register(char *addr, size_t size){
 
+	pthread_mutex_lock(&reg_lock);
+
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
@@ -168,12 +204,12 @@ void uffd_register(char *addr, size_t size){
 	char *st = (char*)((unsigned long)addr & ~(page_size - 1));
 	char *ed = (char*)((((unsigned long)addr + size) & ~(page_size - 1)) + 4096 );
 
-	//printf("region_size %lu actual needed %lu\n", region_size, (unsigned long)ed - (unsigned long)st);
 	region_size = (unsigned long)ed - (unsigned long)st;
 
-	if(add_reg_pair(region, region_size)){
-		char *region = reg_list->list[reg_list->pos].region;
-		size_t region_size = reg_list->list[reg_list->pos].size;
+	int pos = add_reg_pair(region, region_size);
+	if(pos != -1){
+		char *region = reg_list->list[pos].region;
+		size_t region_size = reg_list->list[pos].size;
 
 		int uffd = fargs->uffd;
 		assert(uffd != -1);
@@ -185,17 +221,25 @@ void uffd_register(char *addr, size_t size){
 		uffdio_register.ioctls = 0;
 		assert(ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) != -1);
 
+		if(rank == PRINT_RANK)
+			printf("REGISTER %p %ld\n", region, region_size);
+
 		struct uffdio_writeprotect uffdio_wp;
 		uffdio_wp.range.start = (unsigned long)region;
 		uffdio_wp.range.len = region_size;
 		uffdio_wp.mode = 0;
 		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
-		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+		if(pos == reg_list->pos)
+			reg_list->pos++;
 
-		reg_list->pos++;
+		pthread_mutex_lock(&cache_lock);
+		put(cache, (unsigned long)(addr) % size, size);
+		pthread_mutex_unlock(&cache_lock);
 	}
+
+	pthread_mutex_unlock(&reg_lock);
+
 }
 
 

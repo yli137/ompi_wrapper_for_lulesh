@@ -6,12 +6,14 @@
 #include <time.h>
 #include <openssl/sha.h>
 
+//#define _GNU_SOURCE
 #include "orderedhashmap.h"
 
 #define PRINT_RANK 0
 
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
+extern pthread_mutex_t reg_lock;
 
 extern int last_comp_index;
 

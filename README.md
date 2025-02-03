@@ -128,4 +128,12 @@ switch CPU ZERO to bitmap
 
 registration has some issue. I've fixed the issue for correctness on address calculation. A memory start and end point could be in different pages, these pages all need to be registered within one registration, this part is done.
 
-still, LULESH still halts. Need to investigate. 
+still, LULESH still halts. Need to investigate.
+
+**2/2/2025**
+
+When merging registration, there is a gap in unregister and register, causing the write fault to unable find the previous registration. 
+
+**2/3/2025**
+
+usleep added will cause uffd to catch fault, otherwise no fault is detected.

@@ -71,6 +71,18 @@ void *starts_async_compression(void *arg)
 
 	struct uffdio_writeprotect uffdio_wp;
 	while(1){
+
+#if 0
+		if(cargs.rank == PRINT_RANK){
+			for(int i = 0; i < reg_list->pos; i++){
+				printf("%d pos %d dirty %d atomic %d cache_size %ld\n",
+						i, reg_list->pos, reg_list->list[i].dirty, reg_list->list[i].atomic,
+						cache->size);
+			}
+			printf("\n\n");
+		}
+#endif
+
 		//usleep(1);
 
 		pthread_mutex_lock(&cache_lock);
@@ -81,61 +93,92 @@ void *starts_async_compression(void *arg)
 		pthread_mutex_unlock(&cache_lock);
 
 		if(node != NULL){
+			unsigned long pair_st = 0,
+				      pair_ed = 0,
+				      reg_st,
+				      reg_ed;
+
 			for(int i = 0; i < pair_size; i++){
 				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
 					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
-						if(cargs.rank == PRINT_RANK)
-							printf("comp got pair_lock %d\n", i);
 						// setting pair to be compressed ready
 						pair[i].comp_size = pair[i].isend_size+100;
 						pair[i].ready = 1;
 						pair[i].thread = 1;
+
+						pair_st = (unsigned long)(pair[i].aligned_addr);
+						pair_ed = (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size;
+
 						pthread_mutex_unlock(&(pair[i].pair_lock));
-						if(cargs.rank == PRINT_RANK)
-							printf("comp released pair_lock %d\n", i);
 					}
 				}
 			}
 
+			if(cargs.rank == PRINT_RANK)
+				printf("pair_st %p pair_ed %p\n", (char*)pair_st, (char*)pair_ed);
+
+			pthread_mutex_lock(&reg_lock);
 			for(int j = 0; j < reg_list->pos; j++){
-				if( pthread_mutex_lock(&(reg_list->list[j].reg_lock)) == 0 ){
-					if(reg_list->list[j].dirty == 1){
+				//if( pthread_mutex_lock(&(reg_list->list[j].reg_lock)) == 0 ){
 
-						//printf("rank %d locking up %d pos %d\n", cargs.rank, j, reg_list->pos);
-						uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
-						uffdio_wp.range.len = reg_list->list[j].size;
-						uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+					reg_st = (unsigned long)(reg_list->list[j].region);
+					reg_ed = (unsigned long)(reg_list->list[j].region) + reg_list->list[j].size;
+					
+					if(cargs.rank == PRINT_RANK)
+						printf("acquired lock %d pos %d\npair_st %p pair_ed %p reg_st %p reg_ed %p dirty %d\n", 
+								j, reg_list->pos,
+								(char*)pair_st, (char*)pair_ed,
+								(char*)reg_st, (char*)reg_ed,
+								reg_list->list[j].dirty);
+					
+					if(pair_st != 0 && pair_ed != 0){
 
-						if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-							perror("UFFDIO_WRITEPROTECT2");
-							exit(EXIT_FAILURE);
+						if((pair_st >= reg_st && pair_st <= reg_ed ) || (pair_ed >= reg_st && pair_ed <= reg_ed)){
+							if(reg_list->list[j].dirty == 1){// && reg_list->list[j].atomic == 1){
+
+								if(cargs.rank == PRINT_RANK)
+									printf("---LOCKING up %d pos %d addr %p size %d\n", 
+											j, 
+											reg_list->pos,
+											reg_list->list[j].region,
+											reg_list->list[j].size);
+								uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
+								uffdio_wp.range.len = reg_list->list[j].size;
+								uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+
+								if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+									printf("There is no WP %d %p %d\n", cargs.rank,
+											reg_list->list[j].region,
+											reg_list->list[j].size);
+									perror("UFFDIO_WRITEPROTECT2");
+									exit(EXIT_FAILURE);
+								}
+
+								reg_list->list[j].dirty = 0;
+							}
+
 						}
-						reg_list->list[j].dirty = 0;
 					}
-					pthread_mutex_unlock(&(reg_list->list[j].reg_lock));
-				}
+					//pthread_mutex_unlock(&(reg_list->list[j].reg_lock));
+				//}
 			}
+			pthread_mutex_unlock(&reg_lock);
 
 			for(int i = 0; i < pair_size; i++){
-				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
-					if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
-						
-						if(cargs.rank == PRINT_RANK)
-							printf("comp got pair_lock %d\n", i);
 
+				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
+					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
+						
 						if(pair[i].sending == 0){
-							pthread_mutex_unlock(&(pair[i].pair_lock));
-							if(cargs.rank == PRINT_RANK)
-								printf("comp released pair_lock %d\n", i);
+							//pthread_mutex_unlock(&(pair[i].pair_lock));
 							int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 									pair[i].comp_addr, pair[i].isend_size + 100);
 
-							pthread_mutex_lock(&(pair[i].pair_lock));
+							//pthread_mutex_lock(&(pair[i].pair_lock));
 							if(cargs.rank == PRINT_RANK)
-								printf("comp done got pair_lock %d\n", i);
+								printf("comp done %d pair_size %d\n", i, pair_size);
 							if(comp_size < pair[i].isend_size && comp_size != 0){
 								pair[i].comp_size = comp_size;
-								//pair[i].ready = 1;
 								pair[i].thread = 1;
 
 								last_comp_index = i;
@@ -144,14 +187,13 @@ void *starts_async_compression(void *arg)
 
 						pair[i].ncomp++;
 						pthread_mutex_unlock(&(pair[i].pair_lock));
-						
-						if(cargs.rank == PRINT_RANK)
-							printf("comp released pair_lock %d\n", i);
 					}
 				}
 			}
 
 			node = NULL;
+			pair_st = 0;
+			pair_ed = 0;
 		}
 	}
 }
