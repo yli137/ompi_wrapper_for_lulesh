@@ -26,10 +26,10 @@ void *handler(void *arg)
 	struct uffd_msg msg;
 	ssize_t nread;
 
-
+#if DEBUG_UFFD_PRINT
 	if(fargs->rank == PRINT_RANK)
 		printf("handler thread %d\n", getpid());
-
+#endif
 
 	hwloc_topology_t topology;
 	hwloc_topology_init(&topology);
@@ -53,20 +53,27 @@ void *handler(void *arg)
 	while(poll(&pollfd, 1, -1) > 0){
 
 		usleep(1);
+#if DEBUG_UFFD_PRINT
 		if(fargs->rank == PRINT_RANK)
-			printf("STARTING HANDLER\n");
+			printf("STARTING UFFD\n");
+#endif
 
 		nread = read(fargs->uffd, &msg, sizeof(struct uffd_msg));
 		if (nread == 0 || nread == -1) 
 			continue;
 
+#if DEBUG_UFFD_PRINT
 		if(fargs->rank == PRINT_RANK)
 			printf("Caught SOMETHING\n\n");
-
+#endif
 		// Handle the write fault
 		if (msg.event == UFFD_EVENT_PAGEFAULT) {
+
+#if DEBUG_UFFD_PRINT
 			if(fargs->rank == PRINT_RANK)
 				printf("!!!!!!uffd rank %d caught fault %llu\n", fargs->rank, msg.arg.pagefault.flags);
+#endif
+
 			if (msg.arg.pagefault.flags == UFFD_PAGEFAULT_FLAG_WP) {
 				unsigned long fault_address = msg.arg.pagefault.address;
 
@@ -86,6 +93,7 @@ void *handler(void *arg)
 				unsigned long fault_address = msg.arg.pagefault.address;
 				double last_fault = MPI_Wtime();
 
+#if DEBUG_UFFD_PRINT
 				if(fargs->rank == PRINT_RANK){
 					printf("uffd fault_address %p\n", (char*)fault_address);
 					for(int i = 0; i < reg_list->pos; i++){
@@ -100,14 +108,17 @@ void *handler(void *arg)
 					}
 					printf("\n\n");
 				}
+#endif
 
 				struct uffdio_writeprotect uffdio_wp;
 				for(int i = 0; i < pair_size; i++){
 					if(fault_address >= (unsigned long)(pair[i].aligned_addr) &&
 							fault_address < (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size){
 	
+#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd fault address within i %d pair_size %d\n", i, pair_size);
+#endif
 
 						pthread_mutex_lock(&reg_lock);
 						// clear WP off the region, increment "atomic" for how many overlapping buffers
@@ -126,8 +137,10 @@ void *handler(void *arg)
 										(pair_ed >= reg_st && pair_ed <= reg_ed) || // end in the same region
 										(pair_st <= reg_st && pair_ed >= reg_ed) ){
 										
+#if DEBUG_UFFD_PRINT
 									if(fargs->rank == PRINT_RANK)
 										printf("...uffd rank %d clearing %d pos %d %llu\n", fargs->rank, j, reg_list->pos, msg.arg.pagefault.flags);
+#endif
 									uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
 									uffdio_wp.range.len = reg_list->list[j].size;
 									uffdio_wp.mode = 0;
@@ -148,6 +161,7 @@ void *handler(void *arg)
 
 						// Done with changing registration
 
+#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd Trying to obtain lock %d pair_size %d\n", i, pair_size);
 
@@ -155,16 +169,18 @@ void *handler(void *arg)
 
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd obtained lock %d pair_size %d\n", i, pair_size);
-
+#endif
 						pair[i].ready = 0;
 						pair[i].faults++;
 						pair[i].last_fault = last_fault;
 
+#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
 							printf("---uffd rank %d found the pair\n", fargs->rank);
-
+#endif
 						pthread_mutex_lock(&cache_lock);
 
+#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK){
 							printf("uffd Appending to cache %ld addr %ld size %d\n", cache->size, 
 									(unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), 
@@ -178,18 +194,23 @@ void *handler(void *arg)
 							}
 							printf("\n\n");
 						}
+#endif
 						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
 						pthread_mutex_unlock(&cache_lock);
 
 						//pthread_mutex_unlock(&(pair[i].pair_lock));
+#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd release lock %d pair_size %d\n", i, pair_size);
+#endif
 
 					}
 				}
 
+#if DEBUG_UFFD_PRINT
 				if(fargs->rank == PRINT_RANK)
 					printf("uffd OUT\n\n");
+#endif
 			}
 		}
 	}
@@ -231,8 +252,10 @@ void uffd_register(char *addr, size_t size){
 		uffdio_register.ioctls = 0;
 		assert(ioctl(uffd, UFFDIO_REGISTER, &uffdio_register) != -1);
 
+#if DEBUG_REG_PRINT
 		if(rank == PRINT_RANK)
 			printf("REGISTER %p %ld\n", region, region_size);
+#endif
 
 		struct uffdio_writeprotect uffdio_wp;
 		uffdio_wp.range.start = (unsigned long)region;
@@ -247,9 +270,11 @@ void uffd_register(char *addr, size_t size){
 		pthread_mutex_lock(&cache_lock);
 		//put(cache, (unsigned long)(addr) % size, size);
 
-		
+#if DEBUG_REG_PRINT		
 		if(rank == PRINT_RANK)
-			printf("AFTER REGISTRATION cache size %d dirty %d\n", cache->size, reg_list->list[pos].dirty);
+			printf("AFTER REGISTRATION cache size %ld dirty %d\n", cache->size, reg_list->list[pos].dirty);
+#endif
+
 		pthread_mutex_unlock(&cache_lock);
 	}
 

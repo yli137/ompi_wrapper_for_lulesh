@@ -47,8 +47,10 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+#if DEBUG_ISEND_PRINT
 	if(rank == PRINT_RANK)
 		printf("Starts isend %p\n", buf);
+#endif
 
 	int type_size;
 	MPI_Type_size( type, &type_size );
@@ -57,13 +59,14 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	int size1 = 5000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
-
+#if DEBUG_ISEND_PRINT
 	if(rank == PRINT_RANK){
 		for(int i = 0; i < pair_size; i++)
 			printf("Isend pair %d pair_size %d ready %d\n", i, pair_size, pair[i].ready);
 		for(int i = 0; i < reg_list->pos; i++)
 			printf("Isend reg %d reg_size %d dirty %d\n", i, reg_list->pos, reg_list->list[i].dirty);
 	}
+#endif
 
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);

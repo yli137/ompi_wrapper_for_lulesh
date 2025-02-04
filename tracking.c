@@ -189,7 +189,7 @@ int add_reg_pair(char *region, int size)
 			uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
 			uffdio_wp.range.len = reg_list->list[i].size;
 			uffdio_wp.mode = 0;
-			//assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+			assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
 			// unregister
 			struct uffdio_range range;
@@ -203,6 +203,7 @@ int add_reg_pair(char *region, int size)
 
 			reg_list->list[i].dirty = 1;
 
+#if DEBUG_REG_PRINT
 			if(rank == PRINT_RANK)
 				printf("Unregister done %p size %d\n", reg_list->list[i].region, reg_list->list[i].size);
 
@@ -210,11 +211,16 @@ int add_reg_pair(char *region, int size)
 				printf("Merge was %p %d\n",
 						reg_list->list[i].region,
 						reg_list->list[i].size);
+#endif
+			// Merging sizes
 			reg_list->list[i].size += (unsigned long)region + size - (unsigned long)(reg_list->list[i].region) - reg_list->list[i].size;
+
+#if DEBUG_REG_PRINT
 			if(rank == PRINT_RANK)
 				printf("Merge %p %d\n",
 						reg_list->list[i].region,
 						reg_list->list[i].size);
+#endif
 			return i;
 		}
 	}
@@ -226,11 +232,12 @@ int add_reg_pair(char *region, int size)
 	reg_list->list[reg_list->pos].dirty = 1;
 	reg_list->list[reg_list->pos].atomic = 1;
 
+#if DEBUG_REG_PRINT
 	if(rank == PRINT_RANK)
 		printf("register position %d region %p size %d\n",
 				reg_list->pos,
 				region, size);
-
+#endif
 
 	//pthread_mutex_unlock( &(reg_list->list[reg_list->pos].reg_lock) );
 	//reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;

@@ -75,21 +75,6 @@ void *starts_async_compression(void *arg)
 
 	struct uffdio_writeprotect uffdio_wp;
 	while(1){
-
-#if 0
-		pthread_mutex_lock(&creation_lock);
-		for(int i = 0; i < pair_size; i++){
-			if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
-
-				if(pair[i].ready == 0)
-					put(cache, (unsigned long)(pair[i].isend_addr) % pair[i].isend_size, pair[i].isend_size );
-
-				pthread_mutex_unlock(&(pair[i].pair_lock));
-			}
-		}
-		pthread_mutex_unlock(&creation_lock);
-#endif
-
 		pthread_mutex_lock(&cache_lock);
 		if(cache->size > 0)
 			node = remove_lru(cache);
@@ -117,8 +102,10 @@ void *starts_async_compression(void *arg)
 				}
 			}
 
+#if DEBUG_COMP_PRINT
 			if(cargs.rank == PRINT_RANK)
 				printf("ct pair_st %p pair_ed %p\n", (char*)pair_st, (char*)pair_ed);
+#endif
 
 			pthread_mutex_lock(&reg_lock);
 			for(int j = 0; j < reg_list->pos; j++){
@@ -127,24 +114,28 @@ void *starts_async_compression(void *arg)
 					reg_st = (unsigned long)(reg_list->list[j].region);
 					reg_ed = (unsigned long)(reg_list->list[j].region) + reg_list->list[j].size;
 					
+#if DEBUG_COMP_PRINT
 					if(cargs.rank == PRINT_RANK)
 						printf("ct acquired lock %d pos %d\nct pair_st %p pair_ed %p reg_st %p reg_ed %p dirty %d\n", 
 								j, reg_list->pos,
 								(char*)pair_st, (char*)pair_ed,
 								(char*)reg_st, (char*)reg_ed,
 								reg_list->list[j].dirty);
-					
+#endif
+
 					if(pair_st != 0 && pair_ed != 0){
 
 						if((pair_st >= reg_st && pair_st <= reg_ed ) || (pair_ed >= reg_st && pair_ed <= reg_ed)){
 							if(reg_list->list[j].dirty == 1){// && reg_list->list[j].atomic == 1){
 
+#if DEBUG_COMP_PRINT
 								if(cargs.rank == PRINT_RANK)
 									printf("---ct LOCKING up %d pos %d addr %p size %d\n", 
 											j, 
 											reg_list->pos,
 											reg_list->list[j].region,
 											reg_list->list[j].size);
+#endif
 								uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
 								uffdio_wp.range.len = reg_list->list[j].size;
 								uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
@@ -178,8 +169,12 @@ void *starts_async_compression(void *arg)
 									pair[i].comp_addr, pair[i].isend_size + 100);
 
 							//pthread_mutex_lock(&(pair[i].pair_lock));
+							
+#if DEBUG_COMP_PRINT
 							if(cargs.rank == PRINT_RANK)
 								printf("ct comp done %d pair_size %d\n", i, pair_size);
+#endif
+
 							if(comp_size < pair[i].isend_size && comp_size != 0){
 								pair[i].comp_size = comp_size;
 								pair[i].thread = 1;
@@ -194,8 +189,6 @@ void *starts_async_compression(void *arg)
 				}
 			}
 
-			if(cargs.rank == PRINT_RANK)
-			printf("ct OUT\n");
 			node = NULL;
 			pair_st = 0;
 			pair_ed = 0;
