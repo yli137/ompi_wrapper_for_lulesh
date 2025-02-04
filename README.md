@@ -145,3 +145,5 @@ removed manual 1s sleep from CommSend.
 Did something for the registration, it's working for lulesh sizes less than 50 and it will catch all writes for all iteration.
 
 Sizes larger than 50 will halt. Debug shows that main thread is stuck trying to modify data. Maybe uffd thread is stuck somewhere
+
+uffd thread, pair lock caused halt. Took out, works, BUT there is chance to unsync

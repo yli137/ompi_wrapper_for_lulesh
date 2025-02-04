@@ -80,8 +80,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
 			
-#if 0	
-				//printf("compress_size %d size %d\n", pair[index].comp_size, type_size);
+				printf("compress_size %d size %d\n", pair[index].comp_size, type_size);
 				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
 				pair[index].sending = 1;
@@ -91,7 +90,6 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				
 				pthread_mutex_unlock(&(pair[index].pair_lock));
 				return comp_ret;
-#endif
 			}
 			
 			pthread_mutex_unlock(&(pair[index].pair_lock));
@@ -168,31 +166,7 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-#if 0
-	pthread_mutex_lock(&reg_lock);
-	for(int i = 0; i < reg_list->pos; i++){
-		struct uffdio_writeprotect uffdio_wp;
-		uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
-		uffdio_wp.range.len = reg_list->list[i].size;
-		uffdio_wp.mode = 0;
-		assert(ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
-	}
-	pthread_mutex_unlock(&reg_lock);
-#endif
-
 	int ret = MPI_Waitall(count, array_of_requests, array_of_statuses);
-
-#if 0
-	pthread_mutex_lock(&reg_lock);
-	for(int i = 0; i < reg_list->pos; i++){
-		struct uffdio_writeprotect uffdio_wp;
-		uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
-		uffdio_wp.range.len = reg_list->list[i].size;
-		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
-		assert(ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
-	}
-	pthread_mutex_unlock(&reg_lock);
-#endif
 
 	for(int j = 0; j < count; j++){
 		for(int i = 0; i < pair_size; i++){

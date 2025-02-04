@@ -9,7 +9,7 @@
 //#define _GNU_SOURCE
 #include "orderedhashmap.h"
 
-#define PRINT_RANK 0
+#define PRINT_RANK -1
 
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
