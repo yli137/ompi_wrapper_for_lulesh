@@ -41,15 +41,14 @@ struct fault_handler_args *fargs = NULL;
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
-	int *change = (int*)buf;
-	(*change)++;
-	(*change)--;
+	//int *change = (int*)buf;
+	//(*change)++;
 
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	if(rank == PRINT_RANK)
-		printf("Starts isend\n");
+		printf("Starts isend %p\n", buf);
 
 	int type_size;
 	MPI_Type_size( type, &type_size );
@@ -58,18 +57,13 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	int size1 = 5000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
-#if 0
-	if(rank == 1){
-		for(int i = 0; i < reg_list->pos; i++){
-			printf("%d pos %d region %p size %d dirty %d atomic %d\n",
-					i, reg_list->pos,
-					reg_list->list[i].region,
-					reg_list->list[i].size,
-					reg_list->list[i].dirty,
-					reg_list->list[i].atomic);
-		}
+
+	if(rank == PRINT_RANK){
+		for(int i = 0; i < pair_size; i++)
+			printf("Isend pair %d pair_size %d ready %d\n", i, pair_size, pair[i].ready);
+		for(int i = 0; i < reg_list->pos; i++)
+			printf("Isend reg %d reg_size %d dirty %d\n", i, reg_list->pos, reg_list->list[i].dirty);
 	}
-#endif
 
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);
@@ -79,12 +73,15 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			uffd_register((char*)buf, type_size);
 
 		} else if(index != -1){
+
 			pthread_mutex_lock(&(pair[index].pair_lock));
 
 			pair[index].ncomp = 0;
 
 			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-				
+			
+#if 0	
+				//printf("compress_size %d size %d\n", pair[index].comp_size, type_size);
 				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
 				pair[index].sending = 1;
@@ -94,29 +91,9 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				
 				pthread_mutex_unlock(&(pair[index].pair_lock));
 				return comp_ret;
-			}
-
-#if 0
-			else if(pair[index].ready != 1){
-				pair[index].ready == 1;
-				int comp_size = compress_lz4_buffer(pair[index].isend_addr, pair[index].isend_size,
-						pair[index].comp_addr, pair[index].isend_size + 100);
-
-				if(comp_size < type_size && comp_size != 0){
-					pair[index].comp_size = pair[index].isend_size + 100;
-					pair[index].ready = 0;
-					pair[index].thread = 0;
-					
-					//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
-					int comp_ret = MPI_Isend(pair[index].comp_addr, comp_size, MPI_BYTE,
-							dest, tag, comm, request);
-					pthread_mutex_unlock(&(pair[index].pair_lock));
-
-					return comp_ret;
-				}
-			}
 #endif
-
+			}
+			
 			pthread_mutex_unlock(&(pair[index].pair_lock));
 		}
 	}
@@ -143,7 +120,7 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 {
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
+	
 	int ret = MPI_Wait(request, status);
 	int tag = status->MPI_TAG;
 	int count;
@@ -153,15 +130,10 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 		if(pair[i].request != NULL){
 			if(pair[i].request == request){
 				pthread_mutex_lock(&(pair[i].pair_lock));
-				if(rank == PRINT_RANK)
-					printf("wait got lock %d\n", i);
 				
 				pair[i].sending = 0;
 				pair[i].request = NULL;
 				pthread_mutex_unlock(&(pair[i].pair_lock));
-				
-				if(rank == PRINT_RANK)
-					printf("wait release lock %d\n", i);
 			}
 		}
 	}
@@ -195,8 +167,32 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 {
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	
+
+#if 0
+	pthread_mutex_lock(&reg_lock);
+	for(int i = 0; i < reg_list->pos; i++){
+		struct uffdio_writeprotect uffdio_wp;
+		uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+		uffdio_wp.range.len = reg_list->list[i].size;
+		uffdio_wp.mode = 0;
+		assert(ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+	}
+	pthread_mutex_unlock(&reg_lock);
+#endif
+
 	int ret = MPI_Waitall(count, array_of_requests, array_of_statuses);
+
+#if 0
+	pthread_mutex_lock(&reg_lock);
+	for(int i = 0; i < reg_list->pos; i++){
+		struct uffdio_writeprotect uffdio_wp;
+		uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
+		uffdio_wp.range.len = reg_list->list[i].size;
+		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
+		assert(ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+	}
+	pthread_mutex_unlock(&reg_lock);
+#endif
 
 	for(int j = 0; j < count; j++){
 		for(int i = 0; i < pair_size; i++){
@@ -204,15 +200,9 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 				if(pair[i].request == &(array_of_requests[j])){
 					pthread_mutex_lock(&(pair[i].pair_lock));
 					
-					if(rank == PRINT_RANK)
-						printf("waitall got lock %d\n", i);
 					pair[i].sending = 0;
 					pair[i].request = NULL;
-					//printf("send done %d pair_size %d\n", i, pair_size);
 					pthread_mutex_unlock(&(pair[i].pair_lock));
-					
-					if(rank == PRINT_RANK)
-						printf("waitall release lock %d\n", i);
 				}
 			}
 		}

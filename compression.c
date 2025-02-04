@@ -53,9 +53,13 @@ void try_decompress( char *input_buffer, int input_size )
 
 void *starts_async_compression(void *arg)
 {
-	Node *node;
+	Node *node = NULL;
 	comp_thread_args cargs = *((comp_thread_args*)arg);
-	
+
+	if(cargs.rank == PRINT_RANK)
+		printf("compression thread %d\n", getpid());
+
+
 	hwloc_topology_t topology;
 	hwloc_topology_init(&topology);
 	hwloc_topology_load(topology);
@@ -73,23 +77,22 @@ void *starts_async_compression(void *arg)
 	while(1){
 
 #if 0
-		if(cargs.rank == PRINT_RANK){
-			for(int i = 0; i < reg_list->pos; i++){
-				printf("%d pos %d dirty %d atomic %d cache_size %ld\n",
-						i, reg_list->pos, reg_list->list[i].dirty, reg_list->list[i].atomic,
-						cache->size);
+		pthread_mutex_lock(&creation_lock);
+		for(int i = 0; i < pair_size; i++){
+			if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
+
+				if(pair[i].ready == 0)
+					put(cache, (unsigned long)(pair[i].isend_addr) % pair[i].isend_size, pair[i].isend_size );
+
+				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
-			printf("\n\n");
 		}
+		pthread_mutex_unlock(&creation_lock);
 #endif
 
-		//usleep(1);
-
 		pthread_mutex_lock(&cache_lock);
-		if(cache->size > 0){
+		if(cache->size > 0)
 			node = remove_lru(cache);
-			//printf("rank %d catch one\n", cargs.rank);
-		}
 		pthread_mutex_unlock(&cache_lock);
 
 		if(node != NULL){
@@ -115,7 +118,7 @@ void *starts_async_compression(void *arg)
 			}
 
 			if(cargs.rank == PRINT_RANK)
-				printf("pair_st %p pair_ed %p\n", (char*)pair_st, (char*)pair_ed);
+				printf("ct pair_st %p pair_ed %p\n", (char*)pair_st, (char*)pair_ed);
 
 			pthread_mutex_lock(&reg_lock);
 			for(int j = 0; j < reg_list->pos; j++){
@@ -125,7 +128,7 @@ void *starts_async_compression(void *arg)
 					reg_ed = (unsigned long)(reg_list->list[j].region) + reg_list->list[j].size;
 					
 					if(cargs.rank == PRINT_RANK)
-						printf("acquired lock %d pos %d\npair_st %p pair_ed %p reg_st %p reg_ed %p dirty %d\n", 
+						printf("ct acquired lock %d pos %d\nct pair_st %p pair_ed %p reg_st %p reg_ed %p dirty %d\n", 
 								j, reg_list->pos,
 								(char*)pair_st, (char*)pair_ed,
 								(char*)reg_st, (char*)reg_ed,
@@ -137,7 +140,7 @@ void *starts_async_compression(void *arg)
 							if(reg_list->list[j].dirty == 1){// && reg_list->list[j].atomic == 1){
 
 								if(cargs.rank == PRINT_RANK)
-									printf("---LOCKING up %d pos %d addr %p size %d\n", 
+									printf("---ct LOCKING up %d pos %d addr %p size %d\n", 
 											j, 
 											reg_list->pos,
 											reg_list->list[j].region,
@@ -176,7 +179,7 @@ void *starts_async_compression(void *arg)
 
 							//pthread_mutex_lock(&(pair[i].pair_lock));
 							if(cargs.rank == PRINT_RANK)
-								printf("comp done %d pair_size %d\n", i, pair_size);
+								printf("ct comp done %d pair_size %d\n", i, pair_size);
 							if(comp_size < pair[i].isend_size && comp_size != 0){
 								pair[i].comp_size = comp_size;
 								pair[i].thread = 1;
@@ -191,6 +194,8 @@ void *starts_async_compression(void *arg)
 				}
 			}
 
+			if(cargs.rank == PRINT_RANK)
+			printf("ct OUT\n");
 			node = NULL;
 			pair_st = 0;
 			pair_ed = 0;

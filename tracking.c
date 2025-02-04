@@ -189,7 +189,7 @@ int add_reg_pair(char *region, int size)
 			uffdio_wp.range.start = (unsigned long)(reg_list->list[i].region);
 			uffdio_wp.range.len = reg_list->list[i].size;
 			uffdio_wp.mode = 0;
-			assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
+			//assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);
 
 			// unregister
 			struct uffdio_range range;
@@ -200,6 +200,8 @@ int add_reg_pair(char *region, int size)
 				perror("UFFDIO_UNREGISTER failed");
 				exit(EXIT_FAILURE);
 			}
+
+			reg_list->list[i].dirty = 1;
 
 			if(rank == PRINT_RANK)
 				printf("Unregister done %p size %d\n", reg_list->list[i].region, reg_list->list[i].size);

@@ -137,3 +137,11 @@ When merging registration, there is a gap in unregister and register, causing th
 **2/3/2025**
 
 usleep added will cause uffd to catch fault, otherwise no fault is detected.
+
+**2/4/2025**
+
+removed manual 1s sleep from CommSend.
+
+Did something for the registration, it's working for lulesh sizes less than 50 and it will catch all writes for all iteration.
+
+Sizes larger than 50 will halt. Debug shows that main thread is stuck trying to modify data. Maybe uffd thread is stuck somewhere
