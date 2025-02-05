@@ -74,6 +74,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		if(index == -1){
 			index = find_and_create((char*)buf, type_size);
 			uffd_register((char*)buf, type_size);
+			pair[index].request = (unsigned long)request;
 
 		} else if(index != -1){
 
@@ -82,13 +83,14 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pair[index].ncomp = 0;
 
 			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-			
+		
+				//if(rank == PRINT_RANK)
 				printf("compress_size %d size %d\n", pair[index].comp_size, type_size);
 				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 						dest, tag, comm, request);
 				pair[index].sending = 1;
 				pair[index].faults = 0;
-				pair[index].request = request;
+				pair[index].request = (unsigned long)request;
 				
 				
 				pthread_mutex_unlock(&(pair[index].pair_lock));
@@ -112,7 +114,11 @@ int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 		recv_manager_init(manager);
 	}
 
-	recv_manager_add(manager, buf, tag, request);
+	int size;
+	MPI_Type_size(type, &size);
+	size *= count;
+
+	recv_manager_add(manager, buf, size, tag, (unsigned long)request);
 
 	return MPI_Irecv( buf, count, type, source, tag, comm, request );
 }
@@ -128,12 +134,12 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 	MPI_Get_count(status, MPI_BYTE, &count);
 	
 	for(int i = 0; i < pair_size; i++){
-		if(pair[i].request != NULL){
-			if(pair[i].request == request){
+		if(pair[i].request != 0){
+			if(pair[i].request == (unsigned long)request){
 				pthread_mutex_lock(&(pair[i].pair_lock));
 				
 				pair[i].sending = 0;
-				pair[i].request = NULL;
+				pair[i].request = 0;
 				pthread_mutex_unlock(&(pair[i].pair_lock));
 			}
 		}
@@ -143,8 +149,9 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 		if(manager->recv_addrs[i] == NULL)
 			continue;
 
-		if( ((uintptr_t)request == (uintptr_t)(manager->requests[i])) && (tag == manager->tag[i])){
-			try_decompress(manager->recv_addrs[i], count);
+		if( ((unsigned long)request == manager->requests[i]) && (tag == manager->tag[i])){
+	
+			try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
 			//manager->recv_addrs[i] = NULL;
 			manager->tag[i] = -1;
 
@@ -173,12 +180,12 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 
 	for(int j = 0; j < count; j++){
 		for(int i = 0; i < pair_size; i++){
-			if(pair[i].request != NULL){
-				if(pair[i].request == &(array_of_requests[j])){
+			if(pair[i].request != 0){
+				if(pair[i].request == (unsigned long)(array_of_requests[j])){
 					pthread_mutex_lock(&(pair[i].pair_lock));
 					
 					pair[i].sending = 0;
-					pair[i].request = NULL;
+					pair[i].request = 0;
 					pthread_mutex_unlock(&(pair[i].pair_lock));
 				}
 			}

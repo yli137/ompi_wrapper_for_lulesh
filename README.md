@@ -147,3 +147,7 @@ Did something for the registration, it's working for lulesh sizes less than 50 a
 Sizes larger than 50 will halt. Debug shows that main thread is stuck trying to modify data. Maybe uffd thread is stuck somewhere
 
 uffd thread, pair lock caused halt. Took out, works, BUT there is chance to unsync
+
+Working, BUT, there is a slight data correctness shift. 
+
+lulesh is not detecting data correctness issue until some iteration. With or without communicating compressed buffer, the shift is there.

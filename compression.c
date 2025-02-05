@@ -39,14 +39,19 @@ int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 	return LZ4_decompress_safe( input_buffer, output_buffer, input_size, output_size );
 }
 
-void try_decompress( char *input_buffer, int input_size )
+void try_decompress( char *input_buffer, int input_size, size_t supposed_recv_size )
 {
 	int output_size = input_size * 1000;
 	char *decompressed_buffer = (char*)malloc(output_size);
 	int dsize = decompress_lz4_buffer_default(input_buffer, input_size, decompressed_buffer, output_size);
 
-	if(dsize > input_size)
+	if((size_t)input_size != supposed_recv_size)
+		printf("input_size %d recv_size %lu decomp_size %d\n", input_size, supposed_recv_size, dsize);
+
+	if(dsize > input_size){
 		memcpy(input_buffer, decompressed_buffer, dsize);
+		//printf("orig %d decomp_size %d\n", input_size, dsize);
+	}
 
 	free(decompressed_buffer);
 }
@@ -55,10 +60,6 @@ void *starts_async_compression(void *arg)
 {
 	Node *node = NULL;
 	comp_thread_args cargs = *((comp_thread_args*)arg);
-
-	if(cargs.rank == PRINT_RANK)
-		printf("compression thread %d\n", getpid());
-
 
 	hwloc_topology_t topology;
 	hwloc_topology_init(&topology);

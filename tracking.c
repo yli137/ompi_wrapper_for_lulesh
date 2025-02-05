@@ -43,7 +43,7 @@ int find_and_create( char *addr, int size )
 
 		pair[0].ncomp = 0;
 		pair[0].sending = 0;
-		pair[0].request = NULL;
+		pair[0].request = 0;
 	
 		pair[0].aligned_addr = (char*)((unsigned long)addr & ~(4095));
 		
@@ -72,7 +72,7 @@ int find_and_create( char *addr, int size )
 		
 		pair[pair_size].ncomp = 0;
 		pair[pair_size].sending = 0;
-		pair[pair_size].request = NULL;
+		pair[pair_size].request = 0;
 
 		pair[pair_size].aligned_addr = (char*)((unsigned long)addr & ~(4095));
 		char *st = (char*)((unsigned long)addr & ~(4095));
@@ -97,7 +97,8 @@ void recv_manager_init(recv_manager_t *manager) {
 	manager->size = 0;
 	manager->capacity = INITIAL_CAPACITY;
 	manager->recv_addrs = (char**)malloc(manager->capacity * sizeof(char*));
-	manager->requests = (MPI_Request**)malloc(manager->capacity * sizeof(MPI_Request*));
+	manager->requests = (unsigned long*)malloc(manager->capacity * sizeof(unsigned long));
+	manager->recv_size = (size_t*)malloc(manager->capacity * sizeof(size_t));
 	manager->tag = (int*)malloc(manager->capacity * sizeof(int));
 
 	for(int i = 0; i < manager->capacity; i++)
@@ -110,12 +111,13 @@ void recv_manager_init(recv_manager_t *manager) {
 }
 
 // Function to add a new MPI_Irecv to the list
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request) {
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, size_t size, int tag, unsigned long request) {
 	// Check if we need to resize the list
 	if (manager->size >= manager->capacity){
 		manager->capacity *= 2;
 		manager->recv_addrs = (char**) realloc(manager->recv_addrs, manager->capacity * sizeof(char*));
-		manager->requests = (MPI_Request**) realloc(manager->requests, manager->capacity * sizeof(MPI_Request*));
+		manager->requests = (unsigned long*) realloc(manager->requests, manager->capacity * sizeof(unsigned long));
+		manager->recv_size = (size_t*)realloc(manager->recv_size, manager->capacity * sizeof(size_t));
 		manager->tag = (int*) realloc(manager->tag, manager->capacity * sizeof(int));
 
 		if (manager->recv_addrs == NULL || manager->requests == NULL) {
@@ -127,6 +129,7 @@ void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Req
 	// Add the new receiving address and request
 	manager->recv_addrs[manager->size] = (char*)recv_addr;
 	manager->requests[manager->size] = request;
+	manager->recv_size[manager->size] = size;
 	manager->tag[manager->size] = tag;
 
 	manager->size++;
@@ -137,9 +140,11 @@ void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Req
 void recv_manager_free(recv_manager_t *manager) {
 	free(manager->recv_addrs);
 	free(manager->requests);
+	free(manager->recv_size);
 	free(manager->tag);
 	manager->recv_addrs = NULL;
 	manager->requests = NULL;
+	manager->recv_size = NULL;
 	manager->size = 0;
 	manager->capacity = 0;
 }

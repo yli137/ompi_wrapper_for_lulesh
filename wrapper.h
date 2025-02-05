@@ -56,7 +56,7 @@ typedef struct addr_pair {
 
 	int comp_size;
 	int ready;
-	MPI_Request *request;
+	unsigned long request;
 
 	double comp_time;
 	double send_time;
@@ -110,14 +110,16 @@ extern int reg_first;
 // Structure to manage a dynamic list of receive addresses and requests
 typedef struct {
     char **recv_addrs;    // Array of receiving addresses
-    MPI_Request **requests; // Array of MPI requests
+    unsigned long *requests; // Array of MPI requests
+    size_t *recv_size;         // Array of receiving sizes
     int *tag;
     int size;              // Current number of requests
     int capacity;          // Max capacity of the list
 } recv_manager_t;
 
 void recv_manager_init(recv_manager_t *manager);
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request);
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, size_t size,
+		int tag, unsigned long request);
 void recv_manager_free(recv_manager_t *manager);
 
 void init_fault_list();
@@ -150,7 +152,7 @@ int compress_lz4_buffer( const char *input_buffer, int input_size,
 		         char *output_buffer, int output_size );
 int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 		                   char *output_buffer, int output_size );
-void try_decompress( char *input_buffer, int input_size );
+void try_decompress( char *input_buffer, int input_size, size_t supposed_recv_size );
 
 
 // core allocator

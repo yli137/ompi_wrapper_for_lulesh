@@ -165,14 +165,15 @@ void *handler(void *arg)
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd Trying to obtain lock %d pair_size %d\n", i, pair_size);
 
-						//pthread_mutex_lock(&(pair[i].pair_lock));
 
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd obtained lock %d pair_size %d\n", i, pair_size);
 #endif
+						pthread_mutex_lock(&(pair[i].pair_lock));
 						pair[i].ready = 0;
 						pair[i].faults++;
 						pair[i].last_fault = last_fault;
+						pthread_mutex_unlock(&(pair[i].pair_lock));
 
 #if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
@@ -198,7 +199,6 @@ void *handler(void *arg)
 						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
 						pthread_mutex_unlock(&cache_lock);
 
-						//pthread_mutex_unlock(&(pair[i].pair_lock));
 #if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd release lock %d pair_size %d\n", i, pair_size);
