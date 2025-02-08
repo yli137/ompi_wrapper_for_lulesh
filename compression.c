@@ -45,8 +45,8 @@ void try_decompress( char *input_buffer, int input_size, size_t supposed_recv_si
 	char *decompressed_buffer = (char*)malloc(output_size);
 	int dsize = decompress_lz4_buffer_default(input_buffer, input_size, decompressed_buffer, output_size);
 
-	if((size_t)input_size != supposed_recv_size)
-		printf("input_size %d recv_size %lu decomp_size %d\n", input_size, supposed_recv_size, dsize);
+	//if((size_t)input_size != supposed_recv_size)
+	//	printf("input_size %d recv_size %lu decomp_size %d\n", input_size, supposed_recv_size, dsize);
 
 	if(dsize > input_size){
 		memcpy(input_buffer, decompressed_buffer, dsize);
