@@ -30,6 +30,7 @@
 LRUCache *cache;
 pthread_mutex_t cache_lock;
 pthread_mutex_t reg_lock;
+pthread_mutex_t creation_lock;
 
 recv_manager_t* manager = NULL;
 int recv_count = 0;
@@ -78,6 +79,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 		} else if(index != -1){
 
+#if 0
 			pthread_mutex_lock(&(pair[index].pair_lock));
 
 			pair[index].ncomp = 0;
@@ -98,6 +100,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			}
 			
 			pthread_mutex_unlock(&(pair[index].pair_lock));
+#endif
 		}
 	}
 
@@ -215,7 +218,15 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	init_fault_list();
 	
 	// registration lock
-	pthread_mutex_init(&reg_lock, NULL);// = PTHREAD_MUTEX_INITIALIZER;
+	if(pthread_mutex_init(&reg_lock, NULL) != 0){
+		perror("registration lock initialization failed\n");
+	}
+	if(pthread_mutex_init(&cache_lock, NULL) != 0){
+		perror("cache lock initialization failed\n");
+	}
+	if(pthread_mutex_init(&creation_lock, NULL) != 0){
+		perror("creation lock initialization failed\n");
+	}
 
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);

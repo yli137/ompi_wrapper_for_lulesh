@@ -18,7 +18,6 @@
 Pair *pair;
 int pair_size = -1;
 
-pthread_mutex_t creation_lock = PTHREAD_MUTEX_INITIALIZER;
 fault_list flist;
 
 int find_and_create( char *addr, int size )

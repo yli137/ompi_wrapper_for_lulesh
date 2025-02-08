@@ -22,7 +22,6 @@ extern pthread_mutex_t reg_lock;
 extern int last_comp_index;
 
 extern MPI_Request ***requests;
-extern pthread_mutex_t request_lock;
 
 
 // compression thread structure
