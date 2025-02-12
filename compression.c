@@ -76,10 +76,14 @@ void *starts_async_compression(void *arg)
 
 	struct uffdio_writeprotect uffdio_wp;
 	while(1){
+
+
 		pthread_mutex_lock(&cache_lock);
 		if(cache->size > 0)
 			node = remove_lru(cache);
 		pthread_mutex_unlock(&cache_lock);
+
+		usleep(10);
 
 		if(node != NULL){
 			unsigned long pair_st = 0,
@@ -137,6 +141,7 @@ void *starts_async_compression(void *arg)
 											reg_list->list[j].region,
 											reg_list->list[j].size);
 #endif
+						
 								uffdio_wp.range.start = (unsigned long)(reg_list->list[j].region);
 								uffdio_wp.range.len = reg_list->list[j].size;
 								uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;

@@ -52,7 +52,6 @@ void *handler(void *arg)
 
 	while(poll(&pollfd, 1, -1) > 0){
 
-		usleep(1);
 #if DEBUG_UFFD_PRINT
 		if(fargs->rank == PRINT_RANK)
 			printf("STARTING UFFD\n");

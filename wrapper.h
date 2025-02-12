@@ -10,7 +10,7 @@
 #include "orderedhashmap.h"
 
 #define PRINT_RANK 0
-#define DEBUG_COMP_PRINT 0
+#define DEBUG_COMP_PRINT 1
 #define DEBUG_UFFD_PRINT 0
 #define DEBUG_ISEND_PRINT 0
 #define DEBUG_REG_PRINT 0
