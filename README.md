@@ -151,3 +151,7 @@ uffd thread, pair lock caused halt. Took out, works, BUT there is chance to unsy
 Working, BUT, there is a slight data correctness shift. 
 
 lulesh is not detecting data correctness issue until some iteration. With or without communicating compressed buffer, the shift is there.
+
+**2/13/2025**
+
+added a usleep 1000 after popping a node from LRU, will work on most sizes. Extremely small sizes still have some issue (10-30), guess that trylock in isend and lock in compression thread has some conflict.

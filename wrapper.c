@@ -78,27 +78,27 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pair[index].request = (unsigned long)request;
 
 		} else if(index != -1){
+			
+			if(pthread_mutex_trylock(&(pair[index].pair_lock)) == 0){
 
-			pthread_mutex_lock(&(pair[index].pair_lock));
+				pair[index].ncomp = 0;
 
-#if 0
-			pair[index].ncomp = 0;
+				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
 
-			if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-		
-				int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-						dest, tag, comm, request);
-				pair[index].sending = 1;
-				pair[index].faults = 0;
-				pair[index].request = (unsigned long)request;
-				
-				
+					printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
+					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+							dest, tag, comm, request);
+					pair[index].sending = 1;
+					pair[index].faults = 0;
+					pair[index].request = (unsigned long)request;
+
+
+					pthread_mutex_unlock(&(pair[index].pair_lock));
+					return comp_ret;
+				}
+
 				pthread_mutex_unlock(&(pair[index].pair_lock));
-				return comp_ret;
 			}
-#endif
-
-			pthread_mutex_unlock(&(pair[index].pair_lock));
 		}
 	}
 
@@ -128,17 +128,17 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 {
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	
+
 	int ret = MPI_Wait(request, status);
 	int tag = status->MPI_TAG;
 	int count;
 	MPI_Get_count(status, MPI_BYTE, &count);
-	
+
 	for(int i = 0; i < pair_size; i++){
 		if(pair[i].request != 0){
 			if(pair[i].request == (unsigned long)request){
 				pthread_mutex_lock(&(pair[i].pair_lock));
-				
+
 				pair[i].sending = 0;
 				pair[i].request = 0;
 				pthread_mutex_unlock(&(pair[i].pair_lock));
@@ -151,7 +151,7 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 			continue;
 
 		if( ((unsigned long)request == manager->requests[i]) && (tag == manager->tag[i])){
-	
+
 			try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
 			//manager->recv_addrs[i] = NULL;
 			manager->tag[i] = -1;
@@ -184,9 +184,10 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 			if(pair[i].request != 0){
 				if(pair[i].request == (unsigned long)(array_of_requests[j])){
 					pthread_mutex_lock(&(pair[i].pair_lock));
-					
+
 					pair[i].sending = 0;
 					pair[i].request = 0;
+					pair[i].comp_size = pair[i].isend_size+100;
 					pthread_mutex_unlock(&(pair[i].pair_lock));
 				}
 			}
@@ -207,14 +208,14 @@ int wrapper_MPI_Init( int *argc, char ***argv )
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided )
 {
 	int ret = MPI_Init_thread( argc, argv, required, provided );
-	
+
 	// init LRU cache and register list and pair list
 	pthread_mutex_lock(&cache_lock);
 	cache = create_cache(100);
 	pthread_mutex_unlock(&cache_lock);
 	reg_list = init_register_list();
 	init_fault_list();
-	
+
 	// registration lock
 	if(pthread_mutex_init(&reg_lock, NULL) != 0){
 		perror("registration lock initialization failed\n");

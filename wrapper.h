@@ -9,11 +9,13 @@
 //#define _GNU_SOURCE
 #include "orderedhashmap.h"
 
-#define PRINT_RANK 0
-#define DEBUG_COMP_PRINT 1
+#define PRINT_RANK 4
+#define DEBUG_COMP_PRINT 0
 #define DEBUG_UFFD_PRINT 0
 #define DEBUG_ISEND_PRINT 0
 #define DEBUG_REG_PRINT 0
+
+#define USLEEPTIME 1000
 
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;

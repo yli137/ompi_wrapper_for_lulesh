@@ -118,6 +118,11 @@ void *handler(void *arg)
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd fault address within i %d pair_size %d\n", i, pair_size);
 #endif
+						pthread_mutex_lock(&(pair[i].pair_lock));
+						pair[i].ready = 0;
+						pair[i].faults++;
+						pair[i].last_fault = last_fault;
+						pthread_mutex_unlock(&(pair[i].pair_lock));
 
 						pthread_mutex_lock(&reg_lock);
 						// clear WP off the region, increment "atomic" for how many overlapping buffers
@@ -144,7 +149,7 @@ void *handler(void *arg)
 									uffdio_wp.range.len = reg_list->list[j].size;
 									uffdio_wp.mode = 0;
 
-									if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+									if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) < 0) {
 										perror("UFFDIO_WRITEPROTECT1111");
 										exit(EXIT_FAILURE);
 									}
@@ -167,20 +172,8 @@ void *handler(void *arg)
 
 						if(fargs->rank == PRINT_RANK)
 							printf("uffd obtained lock %d pair_size %d\n", i, pair_size);
-#endif
-						pthread_mutex_lock(&(pair[i].pair_lock));
-						pair[i].ready = 0;
-						pair[i].faults++;
-						pair[i].last_fault = last_fault;
-						pthread_mutex_unlock(&(pair[i].pair_lock));
-
-#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK)
 							printf("---uffd rank %d found the pair\n", fargs->rank);
-#endif
-						pthread_mutex_lock(&cache_lock);
-
-#if DEBUG_UFFD_PRINT
 						if(fargs->rank == PRINT_RANK){
 							printf("uffd Appending to cache %ld addr %ld size %d\n", cache->size, 
 									(unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), 
@@ -195,6 +188,7 @@ void *handler(void *arg)
 							printf("\n\n");
 						}
 #endif
+						pthread_mutex_lock(&cache_lock);
 						put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
 						pthread_mutex_unlock(&cache_lock);
 
