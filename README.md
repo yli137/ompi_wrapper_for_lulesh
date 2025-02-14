@@ -155,3 +155,9 @@ lulesh is not detecting data correctness issue until some iteration. With or wit
 **2/13/2025**
 
 added a usleep 1000 after popping a node from LRU, will work on most sizes. Extremely small sizes still have some issue (10-30), guess that trylock in isend and lock in compression thread has some conflict.
+
+ISENDSLEEP and COMPSLEEP is essential to get main thread moving. There is no exact number but 1000 for compression is a must for size larger than 80 in lulesh.
+
+Isend sleep varies for sizes to prevent race condition even though there is a mutex lock in place.
+
+The halt might have caused by the merge of registrations.

@@ -78,14 +78,13 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pair[index].request = (unsigned long)request;
 
 		} else if(index != -1){
-			
+			usleep(ISEND_SLEEP);
 			if(pthread_mutex_trylock(&(pair[index].pair_lock)) == 0){
-
 				pair[index].ncomp = 0;
 
 				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
 
-					printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
+					//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 					pair[index].sending = 1;
