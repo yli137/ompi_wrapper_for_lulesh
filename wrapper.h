@@ -16,7 +16,7 @@
 #define DEBUG_REG_PRINT 0
 
 #define USLEEPTIME 1000
-#define ISEND_SLEEP 1000
+#define ISEND_SLEEP 1
 
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
