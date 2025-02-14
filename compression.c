@@ -171,25 +171,22 @@ void *starts_async_compression(void *arg)
 					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
 						
 						if(pair[i].sending == 0){
-							pthread_mutex_unlock(&(pair[i].pair_lock));
+							//pthread_mutex_unlock(&(pair[i].pair_lock));
 							int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 									pair[i].comp_addr, pair[i].isend_size + 100);
 
-							pthread_mutex_lock(&(pair[i].pair_lock));
-							
 #if DEBUG_COMP_PRINT
 							if(cargs.rank == PRINT_RANK)
 								printf("ct comp done %d pair_size %d\n", i, pair_size);
 #endif
 
-							pthread_mutex_unlock(&(pair[i].pair_lock));
+							//pthread_mutex_lock(&(pair[i].pair_lock));
 							if(comp_size < pair[i].isend_size && comp_size != 0){
 								pair[i].comp_size = comp_size;
 								pair[i].thread = 1;
 
 								last_comp_index = i;
 							}
-							pthread_mutex_lock(&(pair[i].pair_lock));
 						}
 
 						pair[i].ncomp++;
