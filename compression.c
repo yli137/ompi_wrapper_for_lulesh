@@ -35,9 +35,9 @@ int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 	return LZ4_decompress_safe( input_buffer, output_buffer, input_size, output_size );
 }
 
-void try_decompress( char *input_buffer, int input_size )
+void try_decompress( char *input_buffer, int input_size, int recv_size)
 {
-	int output_size = input_size * 1000;
+	int output_size = recv_size;
 	char *decompressed_buffer = (char*)malloc(output_size);
 	int dsize = decompress_lz4_buffer_default(input_buffer, input_size, decompressed_buffer, output_size);
 

@@ -60,6 +60,7 @@ void recv_manager_init(recv_manager_t *manager) {
 	manager->recv_addrs = (char**)malloc(manager->capacity * sizeof(char*));
 	manager->requests = (MPI_Request**)malloc(manager->capacity * sizeof(MPI_Request*));
 	manager->tag = (int*)malloc(manager->capacity * sizeof(int));
+	manager->recv_size = (int*)malloc(manager->capacity * sizeof(int));
 
 	for(int i = 0; i < manager->capacity; i++)
 		manager->recv_addrs[i] = NULL;
@@ -71,13 +72,14 @@ void recv_manager_init(recv_manager_t *manager) {
 }
 
 // Function to add a new MPI_Irecv to the list
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request) {
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request, int size) {
 	// Check if we need to resize the list
 	if (manager->size >= manager->capacity){
 		manager->capacity *= 2;
 		manager->recv_addrs = (char**) realloc(manager->recv_addrs, manager->capacity * sizeof(char*));
 		manager->requests = (MPI_Request**) realloc(manager->requests, manager->capacity * sizeof(MPI_Request*));
 		manager->tag = (int*) realloc(manager->tag, manager->capacity * sizeof(int));
+		manager->recv_size = (int*) realloc(manager->recv_size, manager->capacity * sizeof(int));
 
 		if (manager->recv_addrs == NULL || manager->requests == NULL) {
 			printf("--------------Failed to reallocate memory for recv_manager\n");
@@ -89,6 +91,7 @@ void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Req
 	manager->recv_addrs[manager->size] = (char*)recv_addr;
 	manager->requests[manager->size] = request;
 	manager->tag[manager->size] = tag;
+	manager->recv_size[manager->size] = size;
 
 	manager->size++;
 

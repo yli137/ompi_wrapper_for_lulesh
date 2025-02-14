@@ -61,12 +61,16 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
+	int size;
+	MPI_Type_size(type, &size);
+	size *= count;
+
 	if(manager == NULL){
 		manager = (recv_manager_t*)malloc(sizeof(recv_manager_t));
 		recv_manager_init(manager);
 	}
 
-	recv_manager_add(manager, buf, tag, request);
+	recv_manager_add(manager, buf, tag, request, size);
 
 	return MPI_Irecv( buf, count, type, source, tag, comm, request );
 }
@@ -83,7 +87,7 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 			continue;
 
 		if( ((uintptr_t)request == (uintptr_t)(manager->requests[i])) && (tag == manager->tag[i])){
-			try_decompress(manager->recv_addrs[i], count);
+			try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
 			//manager->recv_addrs[i] = NULL;
 			manager->tag[i] = -1;
 

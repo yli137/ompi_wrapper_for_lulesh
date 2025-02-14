@@ -74,12 +74,13 @@ typedef struct {
     char **recv_addrs;    // Array of receiving addresses
     MPI_Request **requests; // Array of MPI requests
     int *tag;
+    int *recv_size;
     int size;              // Current number of requests
     int capacity;          // Max capacity of the list
 } recv_manager_t;
 
 void recv_manager_init(recv_manager_t *manager);
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request);
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request, int size);
 void recv_manager_free(recv_manager_t *manager);
 
 void init_fault_list();
@@ -111,7 +112,7 @@ int compress_lz4_buffer( const char *input_buffer, int input_size,
 		         char *output_buffer, int output_size );
 int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 		                   char *output_buffer, int output_size );
-void try_decompress( char *input_buffer, int input_size );
+void try_decompress( char *input_buffer, int input_size, int recv_size );
 
 
 // core allocator
