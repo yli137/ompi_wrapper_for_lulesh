@@ -41,19 +41,19 @@ int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 
 void try_decompress( char *input_buffer, int input_size, size_t supposed_recv_size )
 {
-	int output_size = input_size * 1000;
-	char *decompressed_buffer = (char*)malloc(output_size);
-	int dsize = decompress_lz4_buffer_default(input_buffer, input_size, decompressed_buffer, output_size);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	if((size_t)input_size != supposed_recv_size){
 
-	if((size_t)dsize != supposed_recv_size && (size_t)input_size != supposed_recv_size)
-		printf("input_size %d recv_size %lu decomp_size %d\n", input_size, supposed_recv_size, dsize);
+		int output_size = supposed_recv_size * 2;
+		char *decompressed_buffer = (char*)malloc(output_size);
+		int dsize = decompress_lz4_buffer_default(input_buffer, input_size, decompressed_buffer, output_size);
 
-	if(dsize > input_size){
-		memcpy(input_buffer, decompressed_buffer, dsize);
-		//printf("orig %d decomp_size %d\n", input_size, dsize);
+		if((size_t)dsize != supposed_recv_size)
+			printf("rank %d not decompressed right dsize %d input_size %d supposed_size %lu\n", rank, dsize, input_size, supposed_recv_size);
+
+		free(decompressed_buffer);
 	}
-
-	free(decompressed_buffer);
 }
 
 void *starts_async_compression(void *arg)
@@ -77,7 +77,6 @@ void *starts_async_compression(void *arg)
 	struct uffdio_writeprotect uffdio_wp;
 	while(1){
 		
-#if 0
 		if(pthread_mutex_trylock(&creation_lock) == 0){
 			for(int i = 0; i < pair_size; i++){
 				if(pair[i].comp_size > pair[i].isend_size){
@@ -88,9 +87,8 @@ void *starts_async_compression(void *arg)
 			}
 			pthread_mutex_unlock(&creation_lock);
 		}
-#endif
 
-#define SKIP_TIME 500
+#define SKIP_TIME 10000
 		pthread_mutex_lock(&cache_lock);
 		if(cache->size > 0){
 			while(get_timestamp() - get_first_node_time(cache) < SKIP_TIME){
@@ -100,6 +98,9 @@ void *starts_async_compression(void *arg)
 			}
 
 			node = remove_lru(cache);
+
+			//if(cargs.rank == PRINT_RANK)
+			//	printf("popped a node\n");
 		}
 		pthread_mutex_unlock(&cache_lock);
 
@@ -112,6 +113,8 @@ void *starts_async_compression(void *arg)
 			for(int i = 0; i < pair_size; i++){
 				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
 					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
+						//if(cargs.rank == PRINT_RANK)
+						//	printf("found pair %d pair_size %d\n", i, pair_size);
 						// setting pair to be compressed ready
 						pair[i].comp_size = pair[i].isend_size+100;
 						pair[i].ready = 1;
@@ -125,7 +128,6 @@ void *starts_async_compression(void *arg)
 				}
 			}
 
-			//usleep(USLEEPTIME);
 			pthread_mutex_lock(&reg_lock);
 			for(int j = 0; j < reg_list->pos; j++){
 				reg_st = (unsigned long)(reg_list->list[j].region);
@@ -155,17 +157,24 @@ void *starts_async_compression(void *arg)
 			}
 			pthread_mutex_unlock(&reg_lock);
 
-			int lock = 0;
 			for(int i = 0; i < pair_size; i++){
 				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
+					//if(cargs.rank == PRINT_RANK)
+					//	printf("starts compression\n");
 
 					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
 							pair[i].comp_addr, pair[i].isend_size + 100);
 
-					if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
+					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
+						if(cargs.rank == PRINT_RANK)
+							printf("comp_size %d isend_size %d sending %d\n", comp_size, pair[i].isend_size, pair[i].sending);
 						if(comp_size < pair[i].isend_size && comp_size != 0 && pair[i].sending == 0 ){
 							pair[i].comp_size = comp_size;
 							pair[i].thread = 1;
+
+							if(cargs.rank == PRINT_RANK)
+								printf("i %d pair_size %d comp_size %d send_size %d\n",
+										i, pair_size, pair[i].comp_size, pair[i].isend_size);
 
 							last_comp_index = i;
 						}

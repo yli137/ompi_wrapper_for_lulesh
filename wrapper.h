@@ -16,7 +16,6 @@
 #define DEBUG_REG_PRINT 0
 
 #define USLEEPTIME 1000
-#define ISEND_SLEEP 1
 
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
@@ -59,6 +58,7 @@ typedef struct addr_pair {
 	int comp_size;
 	int ready;
 	unsigned long request;
+	long long last_time;
 
 	double comp_time;
 	double send_time;

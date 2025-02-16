@@ -81,17 +81,20 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			put(cache, (unsigned long)(pair[index].isend_addr) % (size_t)(pair[index].isend_size), (size_t)(pair[index].isend_size));
 			pthread_mutex_unlock(&cache_lock);
 
-		} else if(index != -1){
-			//usleep(ISEND_SLEEP);
+			pair[index].last_time = get_timestamp();
 
-			if(pthread_mutex_trylock(&(pair[index].pair_lock)) == 0){
+		} else if(index != -1){
+
+			usleep(1000);
+
+			if(pthread_mutex_lock(&(pair[index].pair_lock)) == 0){
 				pair[index].ncomp = 0;
 
-				//if(rank == 0)
-				//	printf("%d %d %d faults %d\n", rank, pair[index].comp_size, type_size, pair[index].faults);
+				if(rank == 0)
+				printf("%d %d %d ready %d faults %d %llu\n", rank, pair[index].comp_size, type_size, pair[index].ready, pair[index].faults, get_timestamp() - pair[index].last_time);
 				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-					if(rank == 0)
-						printf("%d %d %d faults %d\n", rank, pair[index].comp_size, type_size, pair[index].faults);
+					//if(rank == 0)
+						printf("send %d %d %d faults %d\n", rank, pair[index].comp_size, type_size, pair[index].faults);
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 					pair[index].sending = 1;
@@ -106,6 +109,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				pthread_mutex_unlock(&(pair[index].pair_lock));
 			}
 		}
+		pair[index].sending = 2;
 	}
 
 	//printf("%d %d %d\n", rank, type_size, type_size);
@@ -135,7 +139,6 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	int ret = MPI_Wait(request, status);
-	int tag = status->MPI_TAG;
 	int count;
 	MPI_Get_count(status, MPI_BYTE, &count);
 
@@ -144,9 +147,8 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 		if(pair[i].request != 0){
 			if(pair[i].request == (unsigned long)request){
 
-				//pair[i].sending = 0;
+				pair[i].sending = 0;
 				pair[i].request = 0;
-				pair[i].ready = 0;
 			}
 		}
 		pthread_mutex_unlock(&(pair[i].pair_lock));
@@ -190,11 +192,8 @@ int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 			pthread_mutex_lock(&(pair[i].pair_lock));
 			if(pair[i].request != 0){
 				if(pair[i].request == (unsigned long)(array_of_requests[j])){
-
 					pair[i].sending = 0;
 					pair[i].request = 0;
-					pair[i].ready = 0;
-					pair[i].comp_size = pair[i].isend_size+100;
 				}
 			}
 			pthread_mutex_unlock(&(pair[i].pair_lock));

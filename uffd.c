@@ -48,8 +48,6 @@ void *handler(void *arg)
 	pollfd.fd = fargs->uffd;
 	pollfd.events = POLLIN;
 
-	int page_size = sysconf(_SC_PAGE_SIZE);
-
 	while(poll(&pollfd, 1, -1) > 0){
 		nread = read(fargs->uffd, &msg, sizeof(struct uffd_msg));
 		if (nread == 0 || nread == -1) 
