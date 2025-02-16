@@ -137,6 +137,9 @@ void *handler(void *arg);
 
 extern recv_manager_t* manager;
 
+// fetch timestamp
+long long get_timestamp();
+
 // MPI Wrapper
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided );
 int wrapper_MPI_Init( int *argc, char ***argv );

@@ -2,10 +2,20 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "orderedhashmap.h"
+#include "wrapper.h"
 
 #define HASH_SIZE 1024
+
+long long get_timestamp()
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return (long long)tv.tv_sec * 1000000LL + tv.tv_usec;
+}
+
 
 // Hash function for the keys
 unsigned long hash_function(unsigned long key) {
@@ -19,6 +29,9 @@ Node *create_node(unsigned long key, size_t value) {
 	node->value = value;
 	node->prev = NULL;
 	node->next = NULL;
+
+	node->timestamp = get_timestamp();
+
 	return node;
 }
 
@@ -52,6 +65,9 @@ void remove_node(LRUCache *cache, Node *node) {
 void add_to_head(LRUCache *cache, Node *node) {
 	node->next = cache->head;
 	node->prev = NULL;
+
+	node->timestamp = get_timestamp();
+
 	if (cache->head) {
 		cache->head->prev = node;
 	}
@@ -93,7 +109,19 @@ void update_hashmap(LRUCache *cache, unsigned long key, Node *node) {
 	new_entry->key = key;
 	new_entry->node = node;
 	new_entry->next = cache->hashmap[hash];
+
+	node->timestamp = get_timestamp();
+
 	cache->hashmap[hash] = new_entry;
+}
+
+long long get_first_node_time(LRUCache *cache)
+{
+	if(!cache->tail){
+		return 0;
+	}
+
+	return cache->tail->timestamp;
 }
 
 // Remove the least recently used node
@@ -165,7 +193,7 @@ Node remove_least_used(LRUCache *cache) {
 		free(removed);
 		return result;
 	}
-	return (Node){0, 0, NULL, NULL};
+	return (Node){0, 0, 0, NULL, NULL};
 }
 
 void print_cache(LRUCache *cache) {

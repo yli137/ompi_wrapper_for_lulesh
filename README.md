@@ -161,3 +161,7 @@ ISENDSLEEP and COMPSLEEP is essential to get main thread moving. There is no exa
 Isend sleep varies for sizes to prevent race condition even though there is a mutex lock in place.
 
 The halt might have caused by the merge of registrations.
+
+**2/15/2025**
+
+still having data correctness issue. Going to have a debug branch. Thinking maybe decompression is the reason but not sure yet. Going to add supposed recv size for checking.

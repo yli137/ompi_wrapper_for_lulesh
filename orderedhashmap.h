@@ -7,6 +7,7 @@
 typedef struct Node {
 	unsigned long key;
 	size_t value;
+	long long timestamp;
 	struct Node *prev;
 	struct Node *next;
 } Node;
@@ -26,6 +27,8 @@ typedef struct {
 	size_t capacity;
 	size_t size;
 } LRUCache;
+
+long long get_first_node_time(LRUCache *cache);
 
 // Hash function for the keys
 unsigned long hash_function(unsigned long key);
