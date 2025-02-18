@@ -9,11 +9,9 @@
 
 #define HASH_SIZE 1024
 
-long long get_timestamp()
+double get_timestamp()
 {
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (long long)tv.tv_sec * 1000000LL + tv.tv_usec;
+	return MPI_Wtime();
 }
 
 
@@ -115,7 +113,7 @@ void update_hashmap(LRUCache *cache, unsigned long key, Node *node) {
 	cache->hashmap[hash] = new_entry;
 }
 
-long long get_first_node_time(LRUCache *cache)
+double get_first_node_time(LRUCache *cache)
 {
 	if(!cache->tail){
 		return 0;

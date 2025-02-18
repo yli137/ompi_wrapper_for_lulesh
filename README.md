@@ -165,3 +165,13 @@ The halt might have caused by the merge of registrations.
 **2/15/2025**
 
 still having data correctness issue. Going to have a debug branch. Thinking maybe decompression is the reason but not sure yet. Going to add supposed recv size for checking.
+
+**2/16/2025**
+
+modified sending bit even after not sending compressed buffer gets it stable. But no compressed buffer gets through.
+
+sending bit become 0 (not send), 1 (send using compressed buffer), 2 (send without compressed buffer). 
+
+Only 1 will prevent compressed thread from changing the compressed size.
+
+small size is still unstable, but good news is that large size (100) get all data compressed, plus the "final origin energy" matches exactly as the default, and it is about 5% faster.

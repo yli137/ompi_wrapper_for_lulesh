@@ -21,6 +21,8 @@ extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
 extern pthread_mutex_t reg_lock;
 
+extern double total_reg;
+
 extern int last_comp_index;
 
 extern MPI_Request ***requests;
@@ -58,7 +60,7 @@ typedef struct addr_pair {
 	int comp_size;
 	int ready;
 	unsigned long request;
-	long long last_time;
+	double last_time;
 
 	double comp_time;
 	double send_time;
@@ -138,7 +140,7 @@ void *handler(void *arg);
 extern recv_manager_t* manager;
 
 // fetch timestamp
-long long get_timestamp();
+double get_timestamp();
 
 // MPI Wrapper
 int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provided );
@@ -151,6 +153,8 @@ int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status);
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 	                 MPI_Status *array_of_statuses );
+
+int wrapper_MPI_Finalize(void);
 
 // Compression/Decompression
 int compress_lz4_buffer( const char *input_buffer, int input_size,

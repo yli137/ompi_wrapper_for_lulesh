@@ -26,6 +26,9 @@
 
 int last_comp_index = 0;
 
+long long decomp_time = 0;
+long long total_decomp = 0;
+
 int compress_lz4_buffer( const char *input_buffer, int input_size,
 		char *output_buffer, int output_size )
 {
@@ -51,6 +54,8 @@ void try_decompress( char *input_buffer, int input_size, size_t supposed_recv_si
 
 		if((size_t)dsize != supposed_recv_size)
 			printf("rank %d not decompressed right dsize %d input_size %d supposed_size %lu\n", rank, dsize, input_size, supposed_recv_size);
+
+		memcpy(input_buffer, decompressed_buffer, supposed_recv_size);
 
 		free(decompressed_buffer);
 	}
@@ -88,7 +93,7 @@ void *starts_async_compression(void *arg)
 			pthread_mutex_unlock(&creation_lock);
 		}
 
-#define SKIP_TIME 10000
+#define SKIP_TIME 0.001
 		pthread_mutex_lock(&cache_lock);
 		if(cache->size > 0){
 			while(get_timestamp() - get_first_node_time(cache) < SKIP_TIME){
@@ -99,8 +104,6 @@ void *starts_async_compression(void *arg)
 
 			node = remove_lru(cache);
 
-			//if(cargs.rank == PRINT_RANK)
-			//	printf("popped a node\n");
 		}
 		pthread_mutex_unlock(&cache_lock);
 
@@ -166,15 +169,15 @@ void *starts_async_compression(void *arg)
 							pair[i].comp_addr, pair[i].isend_size + 100);
 
 					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
-						if(cargs.rank == PRINT_RANK)
-							printf("comp_size %d isend_size %d sending %d\n", comp_size, pair[i].isend_size, pair[i].sending);
-						if(comp_size < pair[i].isend_size && comp_size != 0 && pair[i].sending == 0 ){
+						//if(cargs.rank == PRINT_RANK)
+						//	printf("comp_size %d isend_size %d sending %d\n", comp_size, pair[i].isend_size, pair[i].sending);
+						if(comp_size < pair[i].isend_size && comp_size != 0 && pair[i].sending != 1 ){
 							pair[i].comp_size = comp_size;
 							pair[i].thread = 1;
 
-							if(cargs.rank == PRINT_RANK)
-								printf("i %d pair_size %d comp_size %d send_size %d\n",
-										i, pair_size, pair[i].comp_size, pair[i].isend_size);
+							//if(cargs.rank == PRINT_RANK)
+							//	printf("i %d pair_size %d comp_size %d send_size %d\n",
+							//			i, pair_size, pair[i].comp_size, pair[i].isend_size);
 
 							last_comp_index = i;
 						}

@@ -53,10 +53,10 @@ int find_and_create( char *addr, int size )
 		pair[0].comp_time = 0;
 		pair[0].faults = 0;
 
+		pthread_mutex_init(&(pair[0].pair_lock), NULL);
+		
 		pair_size = 1;
 		pthread_mutex_unlock( &creation_lock );
-		
-		pthread_mutex_init(&(pair[0].pair_lock), NULL);
 		
 		return -1;
 	} else {
@@ -243,11 +243,7 @@ int add_reg_pair(char *region, int size)
 				region, size);
 #endif
 
-	//pthread_mutex_unlock( &(reg_list->list[reg_list->pos].reg_lock) );
-	//reg_list->list[reg_list->pos].reg_lock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_init(&(reg_list->list[reg_list->pos].reg_lock), NULL);// = PTHREAD_MUTEX_INITIALIZER;
-
-	//reg_list->pos++;
 
 	return reg_list->pos;
 }

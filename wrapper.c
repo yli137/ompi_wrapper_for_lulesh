@@ -32,6 +32,8 @@ pthread_mutex_t cache_lock;
 pthread_mutex_t reg_lock;
 pthread_mutex_t creation_lock;
 
+double total_reg = 0;
+
 recv_manager_t* manager = NULL;
 int recv_count = 0;
 int wait_count = 0;
@@ -57,7 +59,7 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	MPI_Type_size( type, &type_size );
 	type_size *= count;
 
-	int size1 = 500; //2160000; //960000; //240000; //960000; //240000;
+	int size1 = 1000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
 #if DEBUG_ISEND_PRINT
@@ -85,16 +87,12 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 		} else if(index != -1){
 
-			usleep(1000);
-
-			if(pthread_mutex_lock(&(pair[index].pair_lock)) == 0){
+			if(pthread_mutex_trylock(&(pair[index].pair_lock)) == 0){
 				pair[index].ncomp = 0;
 
-				if(rank == 0)
-				printf("%d %d %d ready %d faults %d %llu\n", rank, pair[index].comp_size, type_size, pair[index].ready, pair[index].faults, get_timestamp() - pair[index].last_time);
 				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
 					//if(rank == 0)
-						printf("send %d %d %d faults %d\n", rank, pair[index].comp_size, type_size, pair[index].faults);
+					//	printf("send %d %d %d faults %d\n", rank, pair[index].comp_size, type_size, pair[index].faults);
 					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 							dest, tag, comm, request);
 					pair[index].sending = 1;
@@ -135,9 +133,6 @@ int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 
 int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 {
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
 	int ret = MPI_Wait(request, status);
 	int count;
 	MPI_Get_count(status, MPI_BYTE, &count);
@@ -182,9 +177,6 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 int wrapper_MPI_Waitall( int count, MPI_Request array_of_requests[],
 		MPI_Status *array_of_statuses )
 {
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
 	int ret = MPI_Waitall(count, array_of_requests, array_of_statuses);
 
 	for(int j = 0; j < count; j++){
@@ -216,12 +208,6 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	int ret = MPI_Init_thread( argc, argv, required, provided );
 
 	// init LRU cache and register list and pair list
-	pthread_mutex_lock(&cache_lock);
-	cache = create_cache(100);
-	pthread_mutex_unlock(&cache_lock);
-	reg_list = init_register_list();
-	init_fault_list();
-
 	// registration lock
 	if(pthread_mutex_init(&reg_lock, NULL) != 0){
 		perror("registration lock initialization failed\n");
@@ -233,6 +219,12 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 		perror("creation lock initialization failed\n");
 	}
 
+	pthread_mutex_lock(&cache_lock);
+	cache = create_cache(100);
+	pthread_mutex_unlock(&cache_lock);
+	reg_list = init_register_list();
+	init_fault_list();
+	
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
