@@ -96,38 +96,48 @@ void recv_manager_init(recv_manager_t *manager) {
 	manager->size = 0;
 	manager->capacity = INITIAL_CAPACITY;
 	manager->recv_addrs = (char**)malloc(manager->capacity * sizeof(char*));
-	manager->requests = (unsigned long*)malloc(manager->capacity * sizeof(unsigned long));
-	manager->recv_size = (size_t*)malloc(manager->capacity * sizeof(size_t));
+	manager->source = (int*)malloc(manager->capacity * sizeof(int));
+	manager->recv_size = (int*)malloc(manager->capacity * sizeof(int));
 	manager->tag = (int*)malloc(manager->capacity * sizeof(int));
 
 	for(int i = 0; i < manager->capacity; i++)
 		manager->recv_addrs[i] = NULL;
 
-	if (manager->recv_addrs == NULL || manager->requests == NULL) {
+	if (manager->recv_addrs == NULL || manager->source == NULL) {
 		printf("------------Failed to allocate memory for recv_manager\n");
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 }
 
 // Function to add a new MPI_Irecv to the list
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, size_t size, int tag, unsigned long request) {
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int size, int source, int tag) {
 	// Check if we need to resize the list
 	if (manager->size >= manager->capacity){
 		manager->capacity *= 2;
 		manager->recv_addrs = (char**) realloc(manager->recv_addrs, manager->capacity * sizeof(char*));
-		manager->requests = (unsigned long*) realloc(manager->requests, manager->capacity * sizeof(unsigned long));
-		manager->recv_size = (size_t*)realloc(manager->recv_size, manager->capacity * sizeof(size_t));
+		manager->source = (int*) realloc(manager->source, manager->capacity * sizeof(int));
+		manager->recv_size = (int*)realloc(manager->recv_size, manager->capacity * sizeof(int));
 		manager->tag = (int*) realloc(manager->tag, manager->capacity * sizeof(int));
 
-		if (manager->recv_addrs == NULL || manager->requests == NULL) {
+		if (manager->recv_addrs == NULL || manager->source == NULL) {
 			printf("--------------Failed to reallocate memory for recv_manager\n");
 			MPI_Abort(MPI_COMM_WORLD, 1);
 		}
 	}
 
+	for(int i = 0; i < manager->size; i++){
+		if(manager->recv_addrs[i] == NULL && manager->tag[i] == -1){
+			manager->recv_addrs[i] = (char*)recv_addr;
+			manager->source[i] = source;
+			manager->recv_size[i] = size;
+			manager->tag[i] = tag;
+			return;
+		}
+	}
+
 	// Add the new receiving address and request
 	manager->recv_addrs[manager->size] = (char*)recv_addr;
-	manager->requests[manager->size] = request;
+	manager->source[manager->size] = source;
 	manager->recv_size[manager->size] = size;
 	manager->tag[manager->size] = tag;
 
@@ -138,11 +148,11 @@ void recv_manager_add(recv_manager_t *manager, void *recv_addr, size_t size, int
 // Function to free the recv_manager resources
 void recv_manager_free(recv_manager_t *manager) {
 	free(manager->recv_addrs);
-	free(manager->requests);
+	free(manager->source);
 	free(manager->recv_size);
 	free(manager->tag);
 	manager->recv_addrs = NULL;
-	manager->requests = NULL;
+	manager->source = NULL;
 	manager->recv_size = NULL;
 	manager->size = 0;
 	manager->capacity = 0;
@@ -172,10 +182,6 @@ reg_addr_list *realloc_register_list()
 
 int add_reg_pair(char *region, int size)
 {
-
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
 	// This region starts with in a registered region
 	for(int i = 0; i < reg_list->pos; i++){
 		if((unsigned long)region >= (unsigned long)(reg_list->list[i].region) &&
@@ -207,24 +213,8 @@ int add_reg_pair(char *region, int size)
 
 			reg_list->list[i].dirty = 1;
 
-#if DEBUG_REG_PRINT
-			if(rank == PRINT_RANK)
-				printf("Unregister done %p size %d\n", reg_list->list[i].region, reg_list->list[i].size);
-
-			if(rank == PRINT_RANK)
-				printf("Merge was %p %d\n",
-						reg_list->list[i].region,
-						reg_list->list[i].size);
-#endif
 			// Merging sizes
 			reg_list->list[i].size += (unsigned long)region + size - (unsigned long)(reg_list->list[i].region) - reg_list->list[i].size;
-
-#if DEBUG_REG_PRINT
-			if(rank == PRINT_RANK)
-				printf("Merge %p %d\n",
-						reg_list->list[i].region,
-						reg_list->list[i].size);
-#endif
 			return i;
 		}
 	}
@@ -235,15 +225,6 @@ int add_reg_pair(char *region, int size)
 	reg_list->list[reg_list->pos].size = size;
 	reg_list->list[reg_list->pos].dirty = 1;
 	reg_list->list[reg_list->pos].atomic = 1;
-
-#if DEBUG_REG_PRINT
-	if(rank == PRINT_RANK)
-		printf("register position %d region %p size %d\n",
-				reg_list->pos,
-				region, size);
-#endif
-
-	pthread_mutex_init(&(reg_list->list[reg_list->pos].reg_lock), NULL);// = PTHREAD_MUTEX_INITIALIZER;
 
 	return reg_list->pos;
 }

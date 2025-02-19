@@ -41,19 +41,78 @@ int wait_count = 0;
 reg_addr_list *reg_list = NULL;
 struct fault_handler_args *fargs = NULL;
 
+
+void write_data_to_file(void *data, size_t size, int source, int dest, int tag, int data_size) {
+    // Generate filename dynamically
+    char filename[100];
+    snprintf(filename, sizeof(filename), "/home/yli137/lulesh/wrapper-lulesh/comp_data/%d_%d_%d_%d.bin", source, dest, tag, data_size);
+
+    // Open file for binary writing
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error opening file");
+        return;
+    }
+
+    // Write data to file
+    size_t written = fwrite(data, 1, size, file);
+    if (written != size) {
+        fprintf(stderr, "Error writing data to file: %s\n", filename);
+    }
+
+    // Close file
+    fclose(file);
+};
+void read_and_compare(const void *compare_buffer, int source, int dest, int tag, int data_size)
+{
+	char filename[100];
+	snprintf(filename, sizeof(filename), "/home/yli137/lulesh/wrapper-lulesh/comp_data/%d_%d_%d_%d.bin", source, dest, tag, data_size);
+
+	// Open file for binary reading
+	FILE *file = fopen(filename, "rb");
+	if (!file) {
+		perror("Error opening file for reading");
+		return;
+	}
+
+	// Allocate buffer to store file data
+	void *file_buffer = malloc(data_size);
+	if (!file_buffer) {
+		fprintf(stderr, "Memory allocation failed\n");
+		fclose(file);
+		return;
+	}
+
+	// Read data from file
+	size_t read_size = fread(file_buffer, 1, data_size, file);
+	fclose(file);
+
+	if ((int)read_size != data_size) {
+		fprintf(stderr, "Error reading file: expected %d bytes, got %zu bytes\n", data_size, read_size);
+		free(file_buffer);
+		return;
+	}
+
+	// Compare file buffer with provided buffer
+	if (memcmp(file_buffer, compare_buffer, data_size) == 0) {
+		printf("Comparison successful: No differences found.\n");
+	} else {
+		printf("Comparison failed: Data mismatch found. source %d dest %d tag %d data_size %d\n",
+				source, dest, tag, data_size);
+	}
+
+	// Free allocated memory
+	free(file_buffer);
+
+	remove(filename);
+}
+
+
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
-	//int *change = (int*)buf;
-	//(*change)++;
-
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-#if DEBUG_ISEND_PRINT
-	if(rank == PRINT_RANK)
-		printf("Starts isend %p\n", buf);
-#endif
 
 	int type_size;
 	MPI_Type_size( type, &type_size );
@@ -62,40 +121,34 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 	int size1 = 1000; //2160000; //960000; //240000; //960000; //240000;
 	int index = -1;
 
-#if DEBUG_ISEND_PRINT
-	if(rank == PRINT_RANK){
-		for(int i = 0; i < pair_size; i++)
-			printf("Isend pair %d pair_size %d ready %d\n", i, pair_size, pair[i].ready);
-		for(int i = 0; i < reg_list->pos; i++)
-			printf("Isend reg %d reg_size %d dirty %d\n", i, reg_list->pos, reg_list->list[i].dirty);
-	}
-#endif
-
 	if(type_size >= size1){
 		index = find_and_create((char*)buf, type_size);
 
 		if(index == -1){
 			index = find_and_create((char*)buf, type_size);
+			//pthread_mutex_lock(&cache_lock);
+			//put(cache, (unsigned long)(pair[index].isend_addr) % (size_t)(pair[index].isend_size), (size_t)(pair[index].isend_size));
+			//pthread_mutex_unlock(&cache_lock);
+			
 			uffd_register((char*)buf, type_size);
 			pair[index].request = (unsigned long)request;
-			
-			pthread_mutex_lock(&cache_lock);
-			put(cache, (unsigned long)(pair[index].isend_addr) % (size_t)(pair[index].isend_size), (size_t)(pair[index].isend_size));
-			pthread_mutex_unlock(&cache_lock);
 
 			pair[index].last_time = get_timestamp();
 
 		} else if(index != -1){
-
 			if(pthread_mutex_trylock(&(pair[index].pair_lock)) == 0){
 				pair[index].ncomp = 0;
+				
+				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size && pair[index].comp_size > 0){
+					printf("send to %d %d %d source %d tag %d faults %d\n", dest, pair[index].comp_size, type_size,
+							rank, tag, pair[index].faults);
+					//int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+					//		dest, tag, comm, request);
 
-				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size){
-					//if(rank == 0)
-					//	printf("send %d %d %d faults %d\n", rank, pair[index].comp_size, type_size, pair[index].faults);
-					int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-							dest, tag, comm, request);
-					pair[index].sending = 1;
+					write_data_to_file(buf, type_size, rank, dest, tag, type_size);
+					int comp_ret = MPI_Send(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE, dest, tag, comm);
+					//int comp_ret = MPI_Send(buf, count, type, dest, tag, comm);
+					//pair[index].sending = 1;
 					pair[index].faults = 0;
 					pair[index].request = (unsigned long)request;
 
@@ -107,11 +160,12 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 				pthread_mutex_unlock(&(pair[index].pair_lock));
 			}
 		}
-		pair[index].sending = 2;
+		//pair[index].sending = 2;
 	}
 
 	//printf("%d %d %d\n", rank, type_size, type_size);
-	return MPI_Isend( buf, count, type, dest, tag, comm, request );
+	//return MPI_Isend( buf, count, type, dest, tag, comm, request );
+	return MPI_Send(buf, count, type, dest, tag, comm);
 }
 
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
@@ -122,11 +176,14 @@ int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 		recv_manager_init(manager);
 	}
 
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
 	int size;
 	MPI_Type_size(type, &size);
 	size *= count;
 
-	recv_manager_add(manager, buf, size, tag, (unsigned long)request);
+	recv_manager_add(manager, buf, size, source, tag);
 
 	return MPI_Irecv( buf, count, type, source, tag, comm, request );
 }
@@ -137,35 +194,21 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 	int count;
 	MPI_Get_count(status, MPI_BYTE, &count);
 
-	for(int i = 0; i < pair_size; i++){
-		pthread_mutex_lock(&(pair[i].pair_lock));
-		if(pair[i].request != 0){
-			if(pair[i].request == (unsigned long)request){
-
-				pair[i].sending = 0;
-				pair[i].request = 0;
-			}
-		}
-		pthread_mutex_unlock(&(pair[i].pair_lock));
-	}
+	int rank = 0;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	for(int i = 0; i < manager->size; i++){
 		if(manager->recv_addrs[i] == NULL)
 			continue;
 
-		if( ((unsigned long)request == manager->requests[i])){// && (tag == manager->tag[i])){
+		if( status->MPI_SOURCE == manager->source[i] && status->MPI_TAG == manager->tag[i] ){
 
-			try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
-			//manager->recv_addrs[i] = NULL;
+			if(count < manager->recv_size[i]){
+				try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
+				read_and_compare(manager->recv_addrs[i], status->MPI_SOURCE, rank, status->MPI_TAG, manager->recv_size[i]);
+			}
+			manager->recv_addrs[i] = NULL;
 			manager->tag[i] = -1;
-
-			int j = 0;
-			for(; j < manager->size; j++)
-				if(manager->tag[j] != -1)
-					break;
-
-			if(j == manager->size)
-				manager->size = 0;
 
 			return ret;
 		}
@@ -218,13 +261,16 @@ int wrapper_MPI_Init_thread( int *argc, char ***argv, int required, int *provide
 	if(pthread_mutex_init(&creation_lock, NULL) != 0){
 		perror("creation lock initialization failed\n");
 	}
+	if(pthread_mutex_init(&uffd_lock, NULL) != 0){
+		perror("creation lock initialization failed\n");
+	}
 
 	pthread_mutex_lock(&cache_lock);
 	cache = create_cache(100);
 	pthread_mutex_unlock(&cache_lock);
 	reg_list = init_register_list();
 	init_fault_list();
-	
+
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 

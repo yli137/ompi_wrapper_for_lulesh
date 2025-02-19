@@ -175,3 +175,11 @@ sending bit become 0 (not send), 1 (send using compressed buffer), 2 (send witho
 Only 1 will prevent compressed thread from changing the compressed size.
 
 small size is still unstable, but good news is that large size (100) get all data compressed, plus the "final origin energy" matches exactly as the default, and it is about 5% faster.
+
+**2/18/2025**
+
+I think there is possible writes occurs during compression, causing the corupted compressed data.
+
+Data not invalidate by tge uffd thread fast enough, MPI Isend is sending invalid copy of it.
+
+Wrote a data checking from sender to receiver to check correctness.

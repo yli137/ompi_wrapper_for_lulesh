@@ -20,6 +20,7 @@
 extern LRUCache *cache;
 extern pthread_mutex_t cache_lock;
 extern pthread_mutex_t reg_lock;
+extern pthread_mutex_t uffd_lock;
 
 extern double total_reg;
 
@@ -27,6 +28,8 @@ extern int last_comp_index;
 
 extern MPI_Request ***requests;
 
+void write_data_to_file(void *data, size_t size, int source, int dest, int tag, int data_size);
+void read_and_compare(const void *compare_buffer, int source, int dest, int tag, int data_size);
 
 // compression thread structure
 typedef struct comp_thread_args {
@@ -114,16 +117,16 @@ extern int reg_first;
 // Structure to manage a dynamic list of receive addresses and requests
 typedef struct {
     char **recv_addrs;    // Array of receiving addresses
-    unsigned long *requests; // Array of MPI requests
-    size_t *recv_size;         // Array of receiving sizes
+    int *source;          // Array of MPI source
+    int *recv_size;         // Array of receiving sizes
     int *tag;
     int size;              // Current number of requests
     int capacity;          // Max capacity of the list
 } recv_manager_t;
 
 void recv_manager_init(recv_manager_t *manager);
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, size_t size,
-		int tag, unsigned long request);
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int size,
+		int source, int tag);
 void recv_manager_free(recv_manager_t *manager);
 
 void init_fault_list();
@@ -161,7 +164,7 @@ int compress_lz4_buffer( const char *input_buffer, int input_size,
 		         char *output_buffer, int output_size );
 int decompress_lz4_buffer_default( const char *input_buffer, int input_size,
 		                   char *output_buffer, int output_size );
-void try_decompress( char *input_buffer, int input_size, size_t supposed_recv_size );
+void try_decompress( char *input_buffer, int input_size, int supposed_recv_size );
 
 
 // core allocator
