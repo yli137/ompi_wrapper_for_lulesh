@@ -80,15 +80,16 @@ void *handler(void *arg)
 							//if((pair_st >= reg_st && pair_st <= reg_ed ) || // start in the same region
 							//		(pair_ed >= reg_st && pair_ed <= reg_ed) || // end in the same region
 							//		(pair_st <= reg_st && pair_ed >= reg_ed) ){
-							//pthread_mutex_lock(&(pair[i].pair_lock));
+							pthread_mutex_lock(&(pair[i].pair_lock));
 							pair[i].ready = 0;
+							pair[i].comp_size = pair[i].isend_size + 100;
 							pair[i].faults++;
 							pair[i].last_fault = last_fault;
-							//pthread_mutex_unlock(&(pair[i].pair_lock));
+							pthread_mutex_unlock(&(pair[i].pair_lock));
 
-							//pthread_mutex_lock(&cache_lock);
+							pthread_mutex_lock(&cache_lock);
 							put(cache, (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size), (size_t)(pair[i].isend_size));
-							//pthread_mutex_unlock(&cache_lock);
+							pthread_mutex_unlock(&cache_lock);
 							//}
 						}
 
@@ -146,6 +147,7 @@ void uffd_register(char *addr, size_t size){
 		struct uffdio_writeprotect uffdio_wp;
 		uffdio_wp.range.start = (unsigned long)region;
 		uffdio_wp.range.len = region_size;
+		//printf("region_size %ld\n", region_size);
 		//uffdio_wp.mode = 0;
 		uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 		assert(ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) != -1);

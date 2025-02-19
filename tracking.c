@@ -216,6 +216,8 @@ int add_reg_pair(char *region, int size)
 			// Merging sizes
 			reg_list->list[i].size += (unsigned long)region + size - (unsigned long)(reg_list->list[i].region) - reg_list->list[i].size;
 			return i;
+		} else {
+			printf("There is a else case\n");
 		}
 	}
 

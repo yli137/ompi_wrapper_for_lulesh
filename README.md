@@ -183,3 +183,7 @@ I think there is possible writes occurs during compression, causing the corupted
 Data not invalidate by tge uffd thread fast enough, MPI Isend is sending invalid copy of it.
 
 Wrote a data checking from sender to receiver to check correctness.
+
+**2/19/2025**
+
+Working version! Need to split registration

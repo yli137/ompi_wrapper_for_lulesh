@@ -126,12 +126,12 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 
 		if(index == -1){
 			index = find_and_create((char*)buf, type_size);
-			//pthread_mutex_lock(&cache_lock);
-			//put(cache, (unsigned long)(pair[index].isend_addr) % (size_t)(pair[index].isend_size), (size_t)(pair[index].isend_size));
-			//pthread_mutex_unlock(&cache_lock);
-			
 			uffd_register((char*)buf, type_size);
 			pair[index].request = (unsigned long)request;
+			
+			pthread_mutex_lock(&cache_lock);
+			put(cache, (unsigned long)(pair[index].isend_addr) % (size_t)(pair[index].isend_size), (size_t)(pair[index].isend_size));
+			pthread_mutex_unlock(&cache_lock);
 
 			pair[index].last_time = get_timestamp();
 
@@ -139,13 +139,25 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			if(pthread_mutex_trylock(&(pair[index].pair_lock)) == 0){
 				pair[index].ncomp = 0;
 				
+				pthread_mutex_lock(&cache_lock);
+
+				while(cache->size > 0){
+
+					pthread_mutex_unlock(&cache_lock);
+					pthread_mutex_unlock(&(pair[index].pair_lock));
+					usleep(1);
+					pthread_mutex_lock(&(pair[index].pair_lock));
+					pthread_mutex_lock(&cache_lock);
+				}
+				pthread_mutex_unlock(&cache_lock);
+
 				if(pair[index].ready == 1 && pair[index].comp_size < pair[index].isend_size && pair[index].comp_size > 0){
-					printf("send to %d %d %d source %d tag %d faults %d\n", dest, pair[index].comp_size, type_size,
-							rank, tag, pair[index].faults);
+					//printf("send to %d %d %d source %d tag %d faults %d\n", dest, pair[index].comp_size, type_size,
+					//		rank, tag, pair[index].faults);
 					//int comp_ret = MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 					//		dest, tag, comm, request);
 
-					write_data_to_file(buf, type_size, rank, dest, tag, type_size);
+					//write_data_to_file(buf, type_size, rank, dest, tag, type_size);
 					int comp_ret = MPI_Send(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE, dest, tag, comm);
 					//int comp_ret = MPI_Send(buf, count, type, dest, tag, comm);
 					//pair[index].sending = 1;
@@ -205,7 +217,7 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 
 			if(count < manager->recv_size[i]){
 				try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
-				read_and_compare(manager->recv_addrs[i], status->MPI_SOURCE, rank, status->MPI_TAG, manager->recv_size[i]);
+				//read_and_compare(manager->recv_addrs[i], status->MPI_SOURCE, rank, status->MPI_TAG, manager->recv_size[i]);
 			}
 			manager->recv_addrs[i] = NULL;
 			manager->tag[i] = -1;

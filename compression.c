@@ -90,8 +90,7 @@ void *starts_async_compression(void *arg)
 
 	struct uffdio_writeprotect uffdio_wp;
 	while(1){
-		usleep(100);
-#define SKIP_TIME 0.001
+#define SKIP_TIME 0.0001
 		pthread_mutex_lock(&cache_lock);
 		if(cache->size > 0){
 			while(get_timestamp() - get_first_node_time(cache) < SKIP_TIME){
@@ -112,7 +111,7 @@ void *starts_async_compression(void *arg)
 
 			for(int i = 0; i < pair_size; i++){
 				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
-					//if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
+					if(pthread_mutex_lock(&(pair[i].pair_lock)) == 0){
 						pair[i].comp_size = pair[i].isend_size+100;
 						pair[i].ready = 1;
 						pair[i].thread = 1;
@@ -120,8 +119,8 @@ void *starts_async_compression(void *arg)
 						pair_st = (unsigned long)(pair[i].aligned_addr);
 						pair_ed = (unsigned long)(pair[i].aligned_addr) + pair[i].aligned_size;
 
-					//	pthread_mutex_unlock(&(pair[i].pair_lock));
-					//}
+						pthread_mutex_unlock(&(pair[i].pair_lock));
+					}
 				}
 			}
 
@@ -138,10 +137,10 @@ void *starts_async_compression(void *arg)
 							uffdio_wp.range.len = reg_list->list[j].size;
 							uffdio_wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
 
-							//if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
-							//	perror("UFFDIO_WRITEPROTECT2");
-							//	exit(EXIT_FAILURE);
-							//}
+							if (ioctl(fargs->uffd, UFFDIO_WRITEPROTECT, &uffdio_wp) == -1) {
+								perror("UFFDIO_WRITEPROTECT2");
+								exit(EXIT_FAILURE);
+							}
 
 							reg_list->list[j].dirty = 0;
 						}
@@ -152,11 +151,12 @@ void *starts_async_compression(void *arg)
 			pthread_mutex_unlock(&reg_lock);
 
 			for(int i = 0; i < pair_size; i++){
-				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
-					if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
-						int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
-								pair[i].comp_addr, pair[i].isend_size + 100);
 
+				if(node->key == (unsigned long)(pair[i].isend_addr) % (size_t)(pair[i].isend_size) && node->value == (size_t)(pair[i].isend_size)){
+					int comp_size = compress_lz4_buffer(pair[i].isend_addr, pair[i].isend_size,
+							pair[i].comp_addr, pair[i].isend_size + 100);
+
+					if(pthread_mutex_trylock(&(pair[i].pair_lock)) == 0){
 						if(comp_size < pair[i].isend_size && comp_size != 0 && pair[i].sending != 1 ){
 							//printf("rank %d ready size %d ready %d\n", cargs.rank, comp_size, pair[i].ready);
 							pair[i].comp_size = comp_size;
