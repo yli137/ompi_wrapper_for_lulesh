@@ -22,6 +22,71 @@
 #include <fcntl.h>
 #include <errno.h>
 
+void write_data_to_file(void *data, size_t size, int source, int dest, int tag, int data_size) {
+    // Generate filename dynamically
+    char filename[100];
+    snprintf(filename, sizeof(filename), "/home/yli137/lulesh/wrapper-lulesh/comp_data/%d_%d_%d_%d.bin", source, dest, tag, data_size);
+
+    // Open file for binary writing
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error opening file");
+        return;
+    }
+
+    // Write data to file
+    size_t written = fwrite(data, 1, size, file);
+    if (written != size) {
+        fprintf(stderr, "Error writing data to file: %s\n", filename);
+    }
+
+    // Close file
+    fclose(file);
+};
+void read_and_compare(const void *compare_buffer, int source, int dest, int tag, int data_size)
+{
+	char filename[100];
+	snprintf(filename, sizeof(filename), "/home/yli137/lulesh/wrapper-lulesh/comp_data/%d_%d_%d_%d.bin", source, dest, tag, data_size);
+
+	// Open file for binary reading
+	FILE *file = fopen(filename, "rb");
+	if (!file) {
+		perror("Error opening file for reading");
+		return;
+	}
+
+	// Allocate buffer to store file data
+	void *file_buffer = malloc(data_size);
+	if (!file_buffer) {
+		fprintf(stderr, "Memory allocation failed\n");
+		fclose(file);
+		return;
+	}
+
+	// Read data from file
+	size_t read_size = fread(file_buffer, 1, data_size, file);
+	fclose(file);
+
+	if ((int)read_size != data_size) {
+		fprintf(stderr, "Error reading file: expected %d bytes, got %zu bytes\n", data_size, read_size);
+		free(file_buffer);
+		return;
+	}
+
+	// Compare file buffer with provided buffer
+	if (memcmp(file_buffer, compare_buffer, data_size) == 0) {
+		printf("Comparison successful: No differences found.\n");
+	} else {
+		printf("Comparison failed: Data mismatch found. source %d dest %d tag %d data_size %d\n",
+				source, dest, tag, data_size);
+	}
+
+	// Free allocated memory
+	free(file_buffer);
+
+	remove(filename);
+}
+
 
 recv_manager_t* manager = NULL;
 int recv_count = 0;
@@ -33,8 +98,8 @@ struct fault_handler_args *fargs = NULL;
 int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 		int tag, MPI_Comm comm, MPI_Request *request )
 {
-	//int rank;
-	//MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	int type_size;
 	MPI_Type_size( type, &type_size );
@@ -50,12 +115,16 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pair[index].comp_addr,
 			pair[index].comp_size);
 	if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
+		//write_data_to_file(buf, type_size, rank, dest, tag, type_size);
 		//printf("rank %d send %d type_size %d\n", rank, pair[index].comp_size, type_size);
-		return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
-				dest, tag, comm, request);
+		return MPI_Send(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+				dest, tag, comm);
+		//return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
+		//		dest, tag, comm, request);
 	}
 
-	return MPI_Isend( buf, count, type, dest, tag, comm, request );
+	return MPI_Send( buf, count, type, dest, tag, comm );
+	//return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
 
 int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
@@ -70,15 +139,17 @@ int wrapper_MPI_Irecv( void *buf, int count, MPI_Datatype type, int source,
 		recv_manager_init(manager);
 	}
 
-	recv_manager_add(manager, buf, tag, request, size);
+	recv_manager_add(manager, buf, tag, source, size);
 
 	return MPI_Irecv( buf, count, type, source, tag, comm, request );
 }
 
 int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 {
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
 	int ret = MPI_Wait(request, status);
-	int tag = status->MPI_TAG;
 	int count;
 	MPI_Get_count(status, MPI_BYTE, &count);
 
@@ -86,18 +157,13 @@ int wrapper_MPI_Wait(MPI_Request *request, MPI_Status *status)
 		if(manager->recv_addrs[i] == NULL)
 			continue;
 
-		if( ((uintptr_t)request == (uintptr_t)(manager->requests[i])) && (tag == manager->tag[i])){
-			try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
-			//manager->recv_addrs[i] = NULL;
+		if( status->MPI_SOURCE == manager->source[i] && status->MPI_TAG == manager->tag[i] ){
+			if(count != manager->recv_size[i]){
+				try_decompress(manager->recv_addrs[i], count, manager->recv_size[i]);
+				//read_and_compare(manager->recv_addrs[i], status->MPI_SOURCE, rank, status->MPI_TAG, manager->recv_size[i]);
+			}
+			manager->recv_addrs[i] = NULL;
 			manager->tag[i] = -1;
-
-			int j = 0;
-			for(; j < manager->size; j++)
-				if(manager->tag[j] != -1)
-					break;
-
-			if(j == manager->size)
-				manager->size = 0;
 
 			return ret;
 		}

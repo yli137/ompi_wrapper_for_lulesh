@@ -68,3 +68,6 @@ multi thread compression, default 106s -> compression 104s.
 
 Need to place compression threads on 8-15 and 24-31.
 
+**2/19/2025**
+
+Correct version of plain compression. Check source and tag for recv buffer matching.

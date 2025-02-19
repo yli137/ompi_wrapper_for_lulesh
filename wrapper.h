@@ -8,6 +8,9 @@
 
 extern int first_encounter;
 
+void write_data_to_file(void *data, size_t size, int source, int dest, int tag, int data_size);
+void read_and_compare(const void *compare_buffer, int source, int dest, int tag, int data_size);
+
 // compression thread structure
 typedef struct comp_thread_args {
 	int tn;
@@ -72,7 +75,7 @@ extern int reg_first;
 // Structure to manage a dynamic list of receive addresses and requests
 typedef struct {
     char **recv_addrs;    // Array of receiving addresses
-    MPI_Request **requests; // Array of MPI requests
+    int *source; // Array of MPI requests
     int *tag;
     int *recv_size;
     int size;              // Current number of requests
@@ -80,7 +83,7 @@ typedef struct {
 } recv_manager_t;
 
 void recv_manager_init(recv_manager_t *manager);
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request, int size);
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, int source, int size);
 void recv_manager_free(recv_manager_t *manager);
 
 void init_fault_list();

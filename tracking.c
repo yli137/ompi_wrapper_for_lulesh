@@ -58,38 +58,38 @@ void recv_manager_init(recv_manager_t *manager) {
 	manager->size = 0;
 	manager->capacity = INITIAL_CAPACITY;
 	manager->recv_addrs = (char**)malloc(manager->capacity * sizeof(char*));
-	manager->requests = (MPI_Request**)malloc(manager->capacity * sizeof(MPI_Request*));
+	manager->source = (int*)malloc(manager->capacity * sizeof(int));
 	manager->tag = (int*)malloc(manager->capacity * sizeof(int));
 	manager->recv_size = (int*)malloc(manager->capacity * sizeof(int));
 
 	for(int i = 0; i < manager->capacity; i++)
 		manager->recv_addrs[i] = NULL;
-
-	if (manager->recv_addrs == NULL || manager->requests == NULL) {
-		printf("------------Failed to allocate memory for recv_manager\n");
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
 }
 
 // Function to add a new MPI_Irecv to the list
-void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Request *request, int size) {
+void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, int source, int size) {
 	// Check if we need to resize the list
 	if (manager->size >= manager->capacity){
 		manager->capacity *= 2;
 		manager->recv_addrs = (char**) realloc(manager->recv_addrs, manager->capacity * sizeof(char*));
-		manager->requests = (MPI_Request**) realloc(manager->requests, manager->capacity * sizeof(MPI_Request*));
+		manager->source = (int*) realloc(manager->source, manager->capacity * sizeof(int));
 		manager->tag = (int*) realloc(manager->tag, manager->capacity * sizeof(int));
 		manager->recv_size = (int*) realloc(manager->recv_size, manager->capacity * sizeof(int));
+	}
 
-		if (manager->recv_addrs == NULL || manager->requests == NULL) {
-			printf("--------------Failed to reallocate memory for recv_manager\n");
-			MPI_Abort(MPI_COMM_WORLD, 1);
+	for(int i = 0; i < manager->size; i++){
+		if(manager->recv_addrs[i] == NULL && manager->tag[i] == -1){
+			manager->recv_addrs[i] = (char*)recv_addr;
+			manager->source[i] = source;
+			manager->recv_size[i] = size;
+			manager->tag[i] = tag;
+			return;
 		}
 	}
 
 	// Add the new receiving address and request
 	manager->recv_addrs[manager->size] = (char*)recv_addr;
-	manager->requests[manager->size] = request;
+	manager->source[manager->size] = source;
 	manager->tag[manager->size] = tag;
 	manager->recv_size[manager->size] = size;
 
@@ -100,10 +100,10 @@ void recv_manager_add(recv_manager_t *manager, void *recv_addr, int tag, MPI_Req
 // Function to free the recv_manager resources
 void recv_manager_free(recv_manager_t *manager) {
 	free(manager->recv_addrs);
-	free(manager->requests);
+	free(manager->source);
 	free(manager->tag);
 	manager->recv_addrs = NULL;
-	manager->requests = NULL;
+	manager->source = NULL;
 	manager->size = 0;
 	manager->capacity = 0;
 }
@@ -142,23 +142,6 @@ bool add_reg_pair(char *region, int size)
 			size = size - ((unsigned long)region - (unsigned long)(reg_list->list[i].region));
 		}
 	}
-
-#if 0
-	// This region starts before all addresses but the later part overlap with one of the registered region
-	for(int i = 0; i < reg_list->pos; i++){
-		if((unsigned long)region < (unsigned long)(reg_list->list[i].region) &&
-				(unsigned long)region + size > (unsigned long)(reg_list->list[i].region)){
-			int result_size = (unsigned long)(reg_list->list[i].region) - (unsigned long)region;
-			
-			if(reg_list->pos == reg_list->size)
-				reg_list = realloc_register_list();
-			reg_list->list[reg_list->pos].region = region;
-			reg_list->list[reg_list->pos].size = result_size;
-			reg_list->pos++;
-			return true;
-		}
-	}
-#endif
 
 	if(reg_list->pos == reg_list->size)
 		reg_list = realloc_register_list();
