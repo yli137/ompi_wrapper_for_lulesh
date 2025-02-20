@@ -116,14 +116,14 @@ int wrapper_MPI_Isend( void *buf, int count, MPI_Datatype type, int dest,
 			pair[index].comp_size);
 	if(pair[index].comp_size < type_size && pair[index].comp_size != 0){
 		//write_data_to_file(buf, type_size, rank, dest, tag, type_size);
-		printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
+		//printf("%d %d %d\n", rank, pair[index].comp_size, type_size);
 		return MPI_Send(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 				dest, tag, comm);
 		//return MPI_Isend(pair[index].comp_addr, pair[index].comp_size, MPI_BYTE,
 		//		dest, tag, comm, request);
 	}
 
-	printf("%d %d %d\n", rank, type_size, type_size);
+	//printf("%d %d %d\n", rank, type_size, type_size);
 	return MPI_Send( buf, count, type, dest, tag, comm );
 	//return MPI_Isend( buf, count, type, dest, tag, comm, request );
 }
